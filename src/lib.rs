@@ -72,13 +72,7 @@ impl Meta {
 }
 
 impl Meta {
-    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
-        let game_id = {
-            let mut buf = [0; 6];
-            reader.read_exact(&mut buf)?;
-            buf
-        };
-
+    pub fn read<R: Read>(reader: &mut R, game_id: [u8; 6]) -> io::Result<Self> {
         let disc_number = {
             let mut buf = [0; 1];
             reader.read_exact(&mut buf)?;
@@ -127,21 +121,26 @@ impl Meta {
 
 fn initial_padding(magic: &[u8]) -> Option<u64> {
     match &magic[0..4] {
-        [b'W', b'B', b'F', b'S'] => Some(0x200 - 0x60),
-        [b'C', b'I', b'S', b'O'] | [0xae, 0x0f, 0x38, 0xa2] => Some(0x8000 - 0x60),
-        [b'R', b'V', b'Z', 0x01] | [b'W', b'I', b'A', 0x01] => Some(0x58 - 0x60),
+        [b'W', b'B', b'F', b'S'] => Some(0x200 - 0x6),
+        [b'C', b'I', b'S', b'O'] | [0xae, 0x0f, 0x38, 0xa2] => Some(0x8000 - 0x6),
+        [b'R', b'V', b'Z', 0x01] | [b'W', b'I', b'A', 0x01] => Some(0x58 - 0x6),
         _ => None,
     }
 }
 
 /// Reads the disc header from a Wii/GameCube disc image (ISO or WBFS or CISO or RVZ or WIA or TGC)
 pub fn query<R: Read>(reader: &mut R) -> io::Result<Meta> {
-    let mut meta = Meta::read(reader)?;
+    let mut game_id = [0; 6];
+    reader.read_exact(&mut game_id)?;
 
-    if let Some(padding) = initial_padding(&meta.game_id) {
+    let meta = if let Some(padding) = initial_padding(&game_id) {
         io::copy(&mut reader.take(padding), &mut io::sink())?;
-        meta = Meta::read(reader)?;
-    }
+        let mut game_id = [0; 6];
+        reader.read_exact(&mut game_id)?;
+        Meta::read(reader, game_id)?
+    } else {
+        Meta::read(reader, game_id)?
+    };
 
     if !meta.is_wii() && !meta.is_gc() {
         return Err(io::Error::new(
