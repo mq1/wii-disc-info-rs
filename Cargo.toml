@@ -1,12 +1,12 @@
 [package]
 name = "wii-disc-info"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mq1/wii-disc-info"
-homepage = "https://github.com/mq1/wii-disc-info"
+repository = "https://github.com/mq1/wii-disc-info-rs"
+homepage = "https://github.com/mq1/wii-disc-info-rs"
 description = "Query info about wii disc files (without requiring Seek)"
 
 [features]
