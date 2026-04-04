@@ -30,6 +30,7 @@ fn main() -> Result<(), lexopt::Error> {
     let info = wii_disc_info::query(&mut reader).unwrap();
 
     println!("Game ID: {}", info.game_id());
+    println!("Region: {}", info.region());
     println!("Disc Number: {}", info.disc_number());
     println!("Disc Version: {}", info.disc_version());
     println!("Is Wii: {}", info.is_wii());

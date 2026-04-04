@@ -23,6 +23,33 @@ impl Meta {
         String::from_utf8_lossy(&self.game_id)
     }
 
+    pub const fn region(&self) -> &'static str {
+        match self.game_id[3] {
+            b'A' => "System Wii Channels (i.e. Mii Channel)",
+            b'B' => "Ufouria: The Saga (NA)",
+            b'D' => "Germany",
+            b'E' => "USA",
+            b'F' => "France",
+            b'H' => "Netherlands / Europe alternate languages",
+            b'I' => "Italy",
+            b'J' => "Japan",
+            b'K' => "Korea",
+            b'L' => "Japanese import to Europe, Australia and other PAL regions",
+            b'M' => "American import to Europe, Australia and other PAL regions",
+            b'N' => "Japanese import to USA and other NTSC regions",
+            b'P' => "Europe and other PAL regions such as Australia",
+            b'Q' => "Japanese Virtual Console import to Korea",
+            b'R' => "Russia",
+            b'S' => "Spain",
+            b'T' => "American Virtual Console import to Korea",
+            b'U' => "Australia / Europe alternate languages",
+            b'V' => "Scandinavia",
+            b'W' => "Republic of China (Taiwan) / Hong Kong / Macau",
+            b'X' | b'Y' | b'Z' => "Europe alternate languages / US special releases",
+            _ => "Unknown",
+        }
+    }
+
     pub fn disc_number(&self) -> u8 {
         self.disc_number
     }
