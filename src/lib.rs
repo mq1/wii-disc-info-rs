@@ -125,15 +125,21 @@ impl Meta {
     }
 }
 
-/// Reads the disc header from a Wii/GameCube disc image (ISO or WBFS or CISO)
+fn initial_padding(magic: &[u8]) -> Option<u64> {
+    match &magic[0..4] {
+        [b'W', b'B', b'F', b'S'] => Some(0x200 - 0x60),
+        [b'C', b'I', b'S', b'O'] | [0xae, 0x0f, 0x38, 0xa2] => Some(0x8000 - 0x60),
+        [b'R', b'V', b'Z', 0x01] | [b'W', b'I', b'A', 0x01] => Some(0x58 - 0x60),
+        _ => None,
+    }
+}
+
+/// Reads the disc header from a Wii/GameCube disc image (ISO or WBFS or CISO or RVZ or WIA or TGC)
 pub fn query<R: Read>(reader: &mut R) -> io::Result<Meta> {
     let mut meta = Meta::read(reader)?;
 
-    if meta.game_id.starts_with(b"WBFS") {
-        io::copy(&mut reader.take(0x1a0), &mut io::sink())?;
-        meta = Meta::read(reader)?;
-    } else if meta.game_id.starts_with(b"CISO") {
-        io::copy(&mut reader.take(0x7fa0), &mut io::sink())?;
+    if let Some(padding) = initial_padding(&meta.game_id) {
+        io::copy(&mut reader.take(padding), &mut io::sink())?;
         meta = Meta::read(reader)?;
     }
 
