@@ -222,6 +222,7 @@ impl Meta {
         };
 
         let meta = Self {
+            format,
             game_id,
             disc_number,
             disc_version,
