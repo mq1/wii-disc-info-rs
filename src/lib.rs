@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use arrayvec::ArrayString;
 use std::{
-    borrow::Cow,
     fmt,
     io::{self, Read},
 };
@@ -55,7 +55,7 @@ impl fmt::Display for Format {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RegionByte {
+pub enum RegionChar {
     SystemWiiChannels,
     UfouriaTheSagaNA,
     Germany,
@@ -77,39 +77,39 @@ pub enum RegionByte {
     Scandinavia,
     RepublicOfChinaTaiwanHongKongMacau,
     EuropeAlternateLanguagesUSSpecialReleases,
-    Unknown(u8),
+    Unknown(char),
 }
 
-impl From<u8> for RegionByte {
-    fn from(byte: u8) -> Self {
-        match byte {
-            b'A' => Self::SystemWiiChannels,
-            b'B' => Self::UfouriaTheSagaNA,
-            b'D' => Self::Germany,
-            b'E' => Self::USA,
-            b'F' => Self::France,
-            b'H' => Self::NetherlandsEuropeAlternateLanguages,
-            b'I' => Self::Italy,
-            b'J' => Self::Japan,
-            b'K' => Self::Korea,
-            b'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
-            b'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
-            b'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
-            b'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
-            b'Q' => Self::JapaneseVirtualConsoleImportToKorea,
-            b'R' => Self::Russia,
-            b'S' => Self::Spain,
-            b'T' => Self::AmericanVirtualConsoleImportToKorea,
-            b'U' => Self::AustraliaEuropeAlternateLanguages,
-            b'V' => Self::Scandinavia,
-            b'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
-            b'X' | b'Y' | b'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
-            byte => Self::Unknown(byte),
+impl From<char> for RegionChar {
+    fn from(c: char) -> Self {
+        match c {
+            'A' => Self::SystemWiiChannels,
+            'B' => Self::UfouriaTheSagaNA,
+            'D' => Self::Germany,
+            'E' => Self::USA,
+            'F' => Self::France,
+            'H' => Self::NetherlandsEuropeAlternateLanguages,
+            'I' => Self::Italy,
+            'J' => Self::Japan,
+            'K' => Self::Korea,
+            'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
+            'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
+            'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
+            'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
+            'Q' => Self::JapaneseVirtualConsoleImportToKorea,
+            'R' => Self::Russia,
+            'S' => Self::Spain,
+            'T' => Self::AmericanVirtualConsoleImportToKorea,
+            'U' => Self::AustraliaEuropeAlternateLanguages,
+            'V' => Self::Scandinavia,
+            'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
+            'X' | 'Y' | 'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
+            c => Self::Unknown(c),
         }
     }
 }
 
-impl fmt::Display for RegionByte {
+impl fmt::Display for RegionChar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SystemWiiChannels => write!(f, "System Wii Channels (i.e. Mii Channel)"),
@@ -163,12 +163,12 @@ impl fmt::Display for RegionByte {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Meta {
     format: Format,
-    game_id: [u8; 6],
+    game_id: ArrayString<6>,
     disc_number: u8,
     disc_version: u8,
     wii_magic: [u8; 4],
     gc_magic: [u8; 4],
-    game_title: [u8; 0x40],
+    game_title: ArrayString<0x40>,
 }
 
 impl Meta {
@@ -184,9 +184,12 @@ impl Meta {
 
         if let Some(padding) = format.initial_padding() {
             io::copy(&mut reader.take(padding), &mut io::sink())?;
-            let mut game_id = [0; 6];
             reader.read_exact(&mut game_id)?;
         }
+
+        let game_id = ArrayString::from_byte_string(&game_id).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "Game ID is not valid UTF-8")
+        })?;
 
         let disc_number = {
             let mut buf = [0; 1];
@@ -218,7 +221,9 @@ impl Meta {
         let game_title = {
             let mut buf = [0; 0x40];
             reader.read_exact(&mut buf)?;
-            buf
+            ArrayString::from_byte_string(&buf).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "Game title is not valid UTF-8")
+            })?
         };
 
         let meta = Self {
@@ -241,17 +246,22 @@ impl Meta {
         Ok(meta)
     }
 
-    pub fn game_id(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(&self.game_id)
+    pub fn format(&self) -> Format {
+        self.format
     }
 
-    pub fn region(&self) -> RegionByte {
+    pub fn game_id(&self) -> &str {
+        &self.game_id
+    }
+
+    pub fn region(&self) -> RegionChar {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.game_id == [b'R', b'L', b'W', b'W', b'7', b'8'] {
-            return RegionByte::Scandinavia;
+        if self.game_id.eq("RLWW78") {
+            return RegionChar::Scandinavia;
         }
 
-        self.game_id[3].into()
+        let region_char = self.game_id.chars().nth(3).unwrap_or('\0');
+        RegionChar::from(region_char)
     }
 
     pub fn disc_number(&self) -> u8 {
@@ -270,7 +280,7 @@ impl Meta {
         self.gc_magic == [0xC2, 0x33, 0x9F, 0x3D]
     }
 
-    pub fn game_title(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(&self.game_title)
+    pub fn game_title(&self) -> &str {
+        &self.game_title
     }
 }

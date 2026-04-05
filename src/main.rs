@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #[cfg(feature = "cli")]
-struct Args {}
-
-#[cfg(feature = "cli")]
-fn parse_args() -> Result<Args, lexopt::Error> {
+fn parse_args() -> Result<(), lexopt::Error> {
     use lexopt::prelude::*;
 
     let mut parser = lexopt::Parser::from_env();
@@ -19,16 +16,17 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
-    Ok(Args {})
+    Ok(())
 }
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
-    let _args = parse_args()?;
+    parse_args()?;
 
     let mut reader = std::io::stdin();
-    let info = wii_disc_info::query(&mut reader).unwrap();
+    let info = wii_disc_info::Meta::read(&mut reader).unwrap();
 
+    println!("Format: {}", info.format());
     println!("Game ID: {}", info.game_id());
     println!("Region: {}", info.region());
     println!("Disc Number: {}", info.disc_number());
