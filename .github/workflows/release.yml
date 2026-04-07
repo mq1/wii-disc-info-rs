@@ -51,11 +51,11 @@ jobs:
 
       - name: Install i686 cross-linker
         if: matrix.target == 'i686-unknown-linux-musl'
-        run: sudo apt-get install -y gcc-i686-linux-gnu
+        run: sudo apt-get update && sudo apt-get install -y gcc-i686-linux-gnu
 
       - name: Install armhf cross-linker
         if: matrix.target == 'armv7-unknown-linux-musleabihf'
-        run: sudo apt-get install -y gcc-arm-linux-gnueabihf
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
 
       - name: Build binary
         run: cargo build --locked --release --target ${{ matrix.target }} --features cli
