@@ -1,6 +1,6 @@
 [package]
 name = "wii-disc-info"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -15,6 +15,7 @@ cli = ["dep:lexopt"]
 
 [dependencies]
 arrayvec = "0.7"
+derive_more = { version = "2.1", features = ["display"] }
 lexopt = { version = "0.3", optional = true }
 
 [profile.release]
@@ -23,10 +24,3 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
-
-[lints.rust]
-rust_2018_idioms = "deny"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"

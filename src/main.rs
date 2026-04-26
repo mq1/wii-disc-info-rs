@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![warn(clippy::all, rust_2018_idioms)]
+
 #[cfg(feature = "cli")]
 fn parse_args() -> Result<(), lexopt::Error> {
     use lexopt::prelude::*;

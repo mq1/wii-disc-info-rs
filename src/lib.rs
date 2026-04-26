@@ -1,19 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use arrayvec::ArrayString;
-use std::{
-    fmt,
-    io::{self, Read},
-};
+#![warn(clippy::all, rust_2018_idioms)]
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use arrayvec::ArrayString;
+use derive_more::Display;
+use std::io::{self, Read};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Format {
+    #[display("ISO")]
     Iso,
+
+    #[display("WBFS")]
     Wbfs,
+
+    #[display("CISO")]
     Ciso,
+
+    #[display("RVZ")]
     Rvz,
+
+    #[display("WIA")]
     Wia,
+
+    #[display("TGC")]
     Tgc,
 }
 
@@ -41,46 +52,76 @@ impl From<[u8; 4]> for Format {
     }
 }
 
-impl fmt::Display for Format {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Iso => write!(f, "ISO"),
-            Self::Wbfs => write!(f, "WBFS"),
-            Self::Ciso => write!(f, "CISO"),
-            Self::Rvz => write!(f, "RVZ"),
-            Self::Wia => write!(f, "WIA"),
-            Self::Tgc => write!(f, "TGC"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RegionChar {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+pub enum RegionCode {
+    #[display("System Wii Channels (i.e. Mii Channel)")]
     SystemWiiChannels,
+
+    #[display("Ufouria: The Saga (NA)")]
     UfouriaTheSagaNA,
+
+    #[display("Germany")]
     Germany,
+
+    #[display("USA")]
     USA,
+
+    #[display("France")]
     France,
+
+    #[display("Netherlands / Europe alternate languages")]
     NetherlandsEuropeAlternateLanguages,
+
+    #[display("Italy")]
     Italy,
+
+    #[display("Japan")]
     Japan,
+
+    #[display("Korea")]
     Korea,
+
+    #[display("Japanese import to Europe, Australia and other PAL regions")]
     JapaneseImportToEuropeAustraliaAndOtherPALRegions,
+
+    #[display("American import to Europe, Australia and other PAL regions")]
     AmericanImportToEuropeAustraliaAndOtherPALRegions,
+
+    #[display("Japanese import to USA and other NTSC regions")]
     JapaneseImportToUSAAndOtherNTSCRegions,
+
+    #[display("Europe and other PAL regions such as Australia")]
     EuropeAndOtherPALRegionsSuchAsAustralia,
+
+    #[display("Japanese Virtual Console import to Korea")]
     JapaneseVirtualConsoleImportToKorea,
+
+    #[display("Russia")]
     Russia,
+
+    #[display("Spain")]
     Spain,
+
+    #[display("American Virtual Console import to Korea")]
     AmericanVirtualConsoleImportToKorea,
+
+    #[display("Australia / Europe alternate languages")]
     AustraliaEuropeAlternateLanguages,
+
+    #[display("Scandinavia")]
     Scandinavia,
+
+    #[display("Republic of China (Taiwan) / Hong Kong / Macau")]
     RepublicOfChinaTaiwanHongKongMacau,
+
+    #[display("Europe alternate languages / US special releases")]
     EuropeAlternateLanguagesUSSpecialReleases,
+
+    #[display("Unknown ({_0})")]
     Unknown(char),
 }
 
-impl From<char> for RegionChar {
+impl From<char> for RegionCode {
     fn from(c: char) -> Self {
         match c {
             'A' => Self::SystemWiiChannels,
@@ -109,58 +150,7 @@ impl From<char> for RegionChar {
     }
 }
 
-impl fmt::Display for RegionChar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::SystemWiiChannels => write!(f, "System Wii Channels (i.e. Mii Channel)"),
-            Self::UfouriaTheSagaNA => write!(f, "Ufouria: The Saga (NA)"),
-            Self::Germany => write!(f, "Germany"),
-            Self::USA => write!(f, "USA"),
-            Self::France => write!(f, "France"),
-            Self::NetherlandsEuropeAlternateLanguages => {
-                write!(f, "Netherlands / Europe alternate languages")
-            }
-            Self::Italy => write!(f, "Italy"),
-            Self::Japan => write!(f, "Japan"),
-            Self::Korea => write!(f, "Korea"),
-            Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions => write!(
-                f,
-                "Japanese import to Europe, Australia and other PAL regions"
-            ),
-            Self::AmericanImportToEuropeAustraliaAndOtherPALRegions => write!(
-                f,
-                "American import to Europe, Australia and other PAL regions"
-            ),
-            Self::JapaneseImportToUSAAndOtherNTSCRegions => {
-                write!(f, "Japanese import to USA and other NTSC regions")
-            }
-            Self::EuropeAndOtherPALRegionsSuchAsAustralia => {
-                write!(f, "Europe and other PAL regions such as Australia")
-            }
-            Self::JapaneseVirtualConsoleImportToKorea => {
-                write!(f, "Japanese Virtual Console import to Korea")
-            }
-            Self::Russia => write!(f, "Russia"),
-            Self::Spain => write!(f, "Spain"),
-            Self::AmericanVirtualConsoleImportToKorea => {
-                write!(f, "American Virtual Console import to Korea")
-            }
-            Self::AustraliaEuropeAlternateLanguages => {
-                write!(f, "Australia / Europe alternate languages")
-            }
-            Self::Scandinavia => write!(f, "Scandinavia"),
-            Self::RepublicOfChinaTaiwanHongKongMacau => {
-                write!(f, "Republic of China (Taiwan) / Hong Kong / Macau")
-            }
-            Self::EuropeAlternateLanguagesUSSpecialReleases => {
-                write!(f, "Europe alternate languages / US special releases")
-            }
-            Self::Unknown(byte) => write!(f, "Unknown ({})", char::from(*byte)),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Meta {
     format: Format,
     game_id: ArrayString<6>,
@@ -168,7 +158,7 @@ pub struct Meta {
     disc_version: u8,
     wii_magic: [u8; 4],
     gc_magic: [u8; 4],
-    game_title: ArrayString<0x40>,
+    game_title: ArrayString<64>,
 }
 
 impl Meta {
@@ -190,6 +180,13 @@ impl Meta {
         let game_id = ArrayString::from_byte_string(&game_id).map_err(|_| {
             io::Error::new(io::ErrorKind::InvalidData, "Game ID is not valid UTF-8")
         })?;
+
+        if game_id.chars().any(|c| !c.is_ascii_alphanumeric()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Game ID contains invalid characters",
+            ));
+        }
 
         let disc_number = {
             let mut buf = [0; 1];
@@ -219,7 +216,7 @@ impl Meta {
         };
 
         let game_title = {
-            let mut buf = [0; 0x40];
+            let mut buf = [0; 64];
             reader.read_exact(&mut buf)?;
             ArrayString::from_byte_string(&buf).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Game title is not valid UTF-8")
@@ -250,18 +247,18 @@ impl Meta {
         self.format
     }
 
-    pub fn game_id(&self) -> &str {
+    pub fn game_id(&self) -> &ArrayString<6> {
         &self.game_id
     }
 
-    pub fn region(&self) -> RegionChar {
+    pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
         if self.game_id.eq("RLWW78") {
-            return RegionChar::Scandinavia;
+            return RegionCode::Scandinavia;
         }
 
         let region_char = self.game_id.chars().nth(3).unwrap_or('\0');
-        RegionChar::from(region_char)
+        RegionCode::from(region_char)
     }
 
     pub fn disc_number(&self) -> u8 {
