@@ -3,9 +3,23 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use arrayvec::ArrayString;
 use derive_more::Display;
 use std::io::{self, Read};
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("invalid game ID")]
+    InvalidGameId,
+
+    #[error("invalid game title")]
+    InvalidGameTitle,
+
+    #[error("invalid console")]
+    InvalidConsole,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Format {
@@ -117,35 +131,35 @@ pub enum RegionCode {
     #[display("Europe alternate languages / US special releases")]
     EuropeAlternateLanguagesUSSpecialReleases,
 
-    #[display("Unknown ({_0})")]
-    Unknown(char),
+    #[display("Unknown")]
+    Unknown,
 }
 
-impl From<char> for RegionCode {
-    fn from(c: char) -> Self {
-        match c {
-            'A' => Self::SystemWiiChannels,
-            'B' => Self::UfouriaTheSagaNA,
-            'D' => Self::Germany,
-            'E' => Self::USA,
-            'F' => Self::France,
-            'H' => Self::NetherlandsEuropeAlternateLanguages,
-            'I' => Self::Italy,
-            'J' => Self::Japan,
-            'K' => Self::Korea,
-            'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
-            'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
-            'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
-            'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
-            'Q' => Self::JapaneseVirtualConsoleImportToKorea,
-            'R' => Self::Russia,
-            'S' => Self::Spain,
-            'T' => Self::AmericanVirtualConsoleImportToKorea,
-            'U' => Self::AustraliaEuropeAlternateLanguages,
-            'V' => Self::Scandinavia,
-            'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
-            'X' | 'Y' | 'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
-            c => Self::Unknown(c),
+impl From<u8> for RegionCode {
+    fn from(b: u8) -> Self {
+        match b {
+            b'A' => Self::SystemWiiChannels,
+            b'B' => Self::UfouriaTheSagaNA,
+            b'D' => Self::Germany,
+            b'E' => Self::USA,
+            b'F' => Self::France,
+            b'H' => Self::NetherlandsEuropeAlternateLanguages,
+            b'I' => Self::Italy,
+            b'J' => Self::Japan,
+            b'K' => Self::Korea,
+            b'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
+            b'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
+            b'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
+            b'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
+            b'Q' => Self::JapaneseVirtualConsoleImportToKorea,
+            b'R' => Self::Russia,
+            b'S' => Self::Spain,
+            b'T' => Self::AmericanVirtualConsoleImportToKorea,
+            b'U' => Self::AustraliaEuropeAlternateLanguages,
+            b'V' => Self::Scandinavia,
+            b'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
+            b'X' | b'Y' | b'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
+            _ => Self::Unknown,
         }
     }
 }
@@ -153,16 +167,18 @@ impl From<char> for RegionCode {
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     format: Format,
-    game_id: ArrayString<6>,
+    game_id: [u8; 6],
+    game_id_length: usize,
     disc_number: u8,
     disc_version: u8,
     wii_magic: [u8; 4],
     gc_magic: [u8; 4],
-    game_title: ArrayString<64>,
+    game_title: [u8; 64],
+    game_title_length: usize,
 }
 
 impl Meta {
-    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let mut game_id = [0; 6];
         reader.read_exact(&mut game_id)?;
 
@@ -177,15 +193,20 @@ impl Meta {
             reader.read_exact(&mut game_id)?;
         }
 
-        let game_id = ArrayString::from_byte_string(&game_id).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "Game ID is not valid UTF-8")
-        })?;
+        let game_id_length = game_id.iter().position(|&b| b == 0).unwrap_or(6);
+        if !matches!(game_id_length, 4 | 6) {
+            return Err(Error::InvalidGameId);
+        }
 
-        if game_id.chars().any(|c| !c.is_ascii_alphanumeric()) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Game ID contains invalid characters",
-            ));
+        if str::from_utf8(&game_id[..game_id_length]).is_err() {
+            return Err(Error::InvalidGameId);
+        }
+
+        // Check if game_id is uppercase alphanumeric
+        for b in game_id[..game_id_length].iter() {
+            if !matches!(b, b'A'..=b'Z' | b'0'..=b'9') {
+                return Err(Error::InvalidGameId);
+            }
         }
 
         let disc_number = {
@@ -215,29 +236,27 @@ impl Meta {
             buf
         };
 
-        let game_title = {
-            let mut buf = [0; 64];
-            reader.read_exact(&mut buf)?;
-            ArrayString::from_byte_string(&buf).map_err(|_| {
-                io::Error::new(io::ErrorKind::InvalidData, "Game title is not valid UTF-8")
-            })?
-        };
+        let mut game_title = [0; 64];
+        reader.read_exact(&mut game_title)?;
+        let game_title_length = game_title.iter().position(|&b| b == 0).unwrap_or(64);
+        if str::from_utf8(&game_title[..game_title_length]).is_err() {
+            return Err(Error::InvalidGameTitle);
+        }
 
         let meta = Self {
             format,
             game_id,
+            game_id_length,
             disc_number,
             disc_version,
             wii_magic,
             gc_magic,
             game_title,
+            game_title_length,
         };
 
         if !meta.is_wii() && !meta.is_gc() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Not a valid Wii or GameCube disc image",
-            ));
+            return Err(Error::InvalidConsole);
         }
 
         Ok(meta)
@@ -247,18 +266,17 @@ impl Meta {
         self.format
     }
 
-    pub fn game_id(&self) -> &ArrayString<6> {
-        &self.game_id
+    pub fn game_id(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.game_id[..self.game_id_length]) }
     }
 
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.game_id.eq("RLWW78") {
+        if self.game_id == [b'R', b'L', b'W', b'W', b'7', b'8'] {
             return RegionCode::Scandinavia;
         }
 
-        let region_char = self.game_id.chars().nth(3).unwrap_or('\0');
-        RegionCode::from(region_char)
+        RegionCode::from(self.game_id[3])
     }
 
     pub fn disc_number(&self) -> u8 {
@@ -278,6 +296,6 @@ impl Meta {
     }
 
     pub fn game_title(&self) -> &str {
-        &self.game_title
+        unsafe { str::from_utf8_unchecked(&self.game_title[..self.game_title_length]) }
     }
 }
