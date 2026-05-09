@@ -198,12 +198,8 @@ impl Meta {
             return Err(Error::InvalidGameId);
         }
 
-        if str::from_utf8(&game_id[..game_id_length]).is_err() {
-            return Err(Error::InvalidGameId);
-        }
-
         // Check if game_id is uppercase alphanumeric
-        for b in game_id[..game_id_length].iter() {
+        for b in &game_id[..game_id_length] {
             if !matches!(b, b'A'..=b'Z' | b'0'..=b'9') {
                 return Err(Error::InvalidGameId);
             }
