@@ -1,6 +1,6 @@
 [package]
 name = "wii-disc-info"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -11,12 +11,11 @@ description = "Query info about wii disc files (without requiring Seek)"
 
 [features]
 default = []
-cli = ["dep:lexopt"]
+cli = []
 
 [dependencies]
 thiserror = "2.0"
 derive_more = { version = "2.1", features = ["display"] }
-lexopt = { version = "0.3", optional = true }
 
 [profile.release]
 opt-level = "z"

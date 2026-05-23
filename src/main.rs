@@ -4,30 +4,17 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 #[cfg(feature = "cli")]
-fn parse_args() -> Result<(), lexopt::Error> {
-    use lexopt::prelude::*;
-
-    let mut parser = lexopt::Parser::from_env();
-    while let Some(arg) = parser.next()? {
-        match arg {
-            Short('h') | Long("help") => {
-                println!("Usage: wii-disc-info < FILE");
-                std::process::exit(0);
-            }
-            _ => return Err(arg.unexpected()),
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(feature = "cli")]
-fn main() -> Result<(), lexopt::Error> {
-    parse_args()?;
+fn main() {
+    use std::io::IsTerminal;
 
     let mut reader = std::io::stdin();
-    let info = wii_disc_info::Meta::read(&mut reader).unwrap();
 
+    if reader.is_terminal() {
+        eprintln!("Usage: wii-disc-info < FILE");
+        std::process::exit(1);
+    }
+
+    let info = wii_disc_info::Meta::read(&mut reader).unwrap();
     println!("Format: {}", info.format());
     println!("Game ID: {}", info.game_id());
     println!("Region: {}", info.region());
@@ -36,8 +23,6 @@ fn main() -> Result<(), lexopt::Error> {
     println!("Is Wii: {}", info.is_wii());
     println!("Is GameCube: {}", info.is_gc());
     println!("Game Title: {}", info.game_title());
-
-    Ok(())
 }
 
 #[cfg(not(feature = "cli"))]
