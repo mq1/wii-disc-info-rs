@@ -3,43 +3,65 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use derive_more::Display;
-use std::io::{self, Read};
+use std::io::Read;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("invalid game ID")]
+    Io(std::io::Error),
     InvalidGameId,
-
-    #[error("invalid game title")]
     InvalidGameTitle,
-
-    #[error("invalid console")]
     InvalidConsole,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "IO error: {e}"),
+            Self::InvalidGameId => f.write_str("invalid game ID"),
+            Self::InvalidGameTitle => f.write_str("invalid game title"),
+            Self::InvalidConsole => f.write_str("invalid console"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
-    #[display("ISO")]
     Iso,
-
-    #[display("WBFS")]
     Wbfs,
-
-    #[display("CISO")]
     Ciso,
-
-    #[display("RVZ")]
     Rvz,
-
-    #[display("WIA")]
     Wia,
-
-    #[display("TGC")]
     Tgc,
+}
+
+impl std::fmt::Display for Format {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Iso => "ISO",
+            Self::Wbfs => "WBFS",
+            Self::Ciso => "CISO",
+            Self::Rvz => "RVZ",
+            Self::Wia => "WIA",
+            Self::Tgc => "TGC",
+        };
+
+        f.write_str(name)
+    }
 }
 
 impl Format {
@@ -66,73 +88,73 @@ impl From<[u8; 4]> for Format {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionCode {
-    #[display("System Wii Channels (i.e. Mii Channel)")]
     SystemWiiChannels,
-
-    #[display("Ufouria: The Saga (NA)")]
     UfouriaTheSagaNA,
-
-    #[display("Germany")]
     Germany,
-
-    #[display("USA")]
     USA,
-
-    #[display("France")]
     France,
-
-    #[display("Netherlands / Europe alternate languages")]
     NetherlandsEuropeAlternateLanguages,
-
-    #[display("Italy")]
     Italy,
-
-    #[display("Japan")]
     Japan,
-
-    #[display("Korea")]
     Korea,
-
-    #[display("Japanese import to Europe, Australia and other PAL regions")]
     JapaneseImportToEuropeAustraliaAndOtherPALRegions,
-
-    #[display("American import to Europe, Australia and other PAL regions")]
     AmericanImportToEuropeAustraliaAndOtherPALRegions,
-
-    #[display("Japanese import to USA and other NTSC regions")]
     JapaneseImportToUSAAndOtherNTSCRegions,
-
-    #[display("Europe and other PAL regions such as Australia")]
     EuropeAndOtherPALRegionsSuchAsAustralia,
-
-    #[display("Japanese Virtual Console import to Korea")]
     JapaneseVirtualConsoleImportToKorea,
-
-    #[display("Russia")]
     Russia,
-
-    #[display("Spain")]
     Spain,
-
-    #[display("American Virtual Console import to Korea")]
     AmericanVirtualConsoleImportToKorea,
-
-    #[display("Australia / Europe alternate languages")]
     AustraliaEuropeAlternateLanguages,
-
-    #[display("Scandinavia")]
     Scandinavia,
-
-    #[display("Republic of China (Taiwan) / Hong Kong / Macau")]
     RepublicOfChinaTaiwanHongKongMacau,
-
-    #[display("Europe alternate languages / US special releases")]
     EuropeAlternateLanguagesUSSpecialReleases,
-
-    #[display("Unknown")]
     Unknown,
+}
+
+impl std::fmt::Display for RegionCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::SystemWiiChannels => "System Wii Channels (i.e. Mii Channel)",
+            Self::UfouriaTheSagaNA => "Ufouria: The Saga (NA)",
+            Self::Germany => "Germany",
+            Self::USA => "USA",
+            Self::France => "France",
+            Self::NetherlandsEuropeAlternateLanguages => "Netherlands / Europe alternate languages",
+            Self::Italy => "Italy",
+            Self::Japan => "Japan",
+            Self::Korea => "Korea",
+            Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions => {
+                "Japanese import to Europe, Australia and other PAL regions"
+            }
+            Self::AmericanImportToEuropeAustraliaAndOtherPALRegions => {
+                "American import to Europe, Australia and other PAL regions"
+            }
+            Self::JapaneseImportToUSAAndOtherNTSCRegions => {
+                "Japanese import to USA and other NTSC regions"
+            }
+            Self::EuropeAndOtherPALRegionsSuchAsAustralia => {
+                "Europe and other PAL regions such as Australia"
+            }
+            Self::JapaneseVirtualConsoleImportToKorea => "Japanese Virtual Console import to Korea",
+            Self::Russia => "Russia",
+            Self::Spain => "Spain",
+            Self::AmericanVirtualConsoleImportToKorea => "American Virtual Console import to Korea",
+            Self::AustraliaEuropeAlternateLanguages => "Australia / Europe alternate languages",
+            Self::Scandinavia => "Scandinavia",
+            Self::RepublicOfChinaTaiwanHongKongMacau => {
+                "Republic of China (Taiwan) / Hong Kong / Macau"
+            }
+            Self::EuropeAlternateLanguagesUSSpecialReleases => {
+                "Europe alternate languages / US special releases"
+            }
+            Self::Unknown => "Unknown",
+        };
+
+        f.write_str(name)
+    }
 }
 
 impl From<u8> for RegionCode {
@@ -189,7 +211,7 @@ impl Meta {
         };
 
         if let Some(padding) = format.initial_padding() {
-            io::copy(&mut reader.take(padding), &mut io::sink())?;
+            std::io::copy(&mut reader.take(padding), &mut std::io::sink())?;
             reader.read_exact(&mut game_id)?;
         }
 
@@ -218,7 +240,7 @@ impl Meta {
         };
 
         // padding
-        io::copy(&mut reader.take(0x10), &mut io::sink())?;
+        std::io::copy(&mut reader.take(0x10), &mut std::io::sink())?;
 
         let wii_magic = {
             let mut buf = [0; 4];

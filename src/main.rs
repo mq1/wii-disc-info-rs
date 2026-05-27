@@ -3,10 +3,9 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-#[cfg(feature = "cli")]
-fn main() {
-    use std::io::IsTerminal;
+use std::io::IsTerminal;
 
+fn main() {
     let mut reader = std::io::stdin();
 
     if reader.is_terminal() {
@@ -23,9 +22,4 @@ fn main() {
     println!("Is Wii: {}", info.is_wii());
     println!("Is GameCube: {}", info.is_gc());
     println!("Game Title: {}", info.game_title());
-}
-
-#[cfg(not(feature = "cli"))]
-fn main() {
-    println!("Please add the `cli` feature to enable the CLI");
 }
