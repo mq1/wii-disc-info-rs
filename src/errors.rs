@@ -36,3 +36,9 @@ impl From<std::io::Error> for Error {
         Self::Io(err)
     }
 }
+
+impl From<miniz_oxide::inflate::DecompressError> for Error {
+    fn from(_: miniz_oxide::inflate::DecompressError) -> Self {
+        Self::GczDecompressionFailed
+    }
+}

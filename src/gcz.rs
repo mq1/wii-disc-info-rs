@@ -33,8 +33,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
         return Err(Error::GczDecompressionFailed);
 
         #[cfg(feature = "deflate")]
-        miniz_oxide::inflate::decompress_to_vec_zlib(&block_data)
-            .map_err(|_| Error::GczDecompressionFailed)?
+        miniz_oxide::inflate::decompress_to_vec_zlib(&block_data)?
     };
 
     // Copy to Header Buffer
