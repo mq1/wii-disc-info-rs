@@ -14,7 +14,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     let blk0_offset = blk0_ptr & !(1u64 << 63);
     let blk1_offset = blk1_ptr & !(1u64 << 63);
     if blk0_offset >= blk1_offset {
-        return Err(Error::GczDecompressionFailed);
+        return Err(Error::Gcz);
     }
     let compressed_size = (blk1_offset - blk0_offset) as usize;
 
@@ -30,7 +30,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
         block_data // Uncompressed
     } else {
         #[cfg(not(feature = "deflate"))]
-        return Err(Error::GczDecompressionFailed);
+        return Err(Error::Gcz);
 
         #[cfg(feature = "deflate")]
         miniz_oxide::inflate::decompress_to_vec_zlib(&block_data)?
@@ -39,7 +39,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     // Copy to Header Buffer
     let new_header = decompressed
         .first_chunk::<HEADER_SIZE>()
-        .ok_or(Error::GczDecompressionFailed)?;
+        .ok_or(Error::Gcz)?;
     header.copy_from_slice(new_header);
 
     Ok(())

@@ -7,7 +7,7 @@ pub enum Error {
     InvalidGameId,
     InvalidGameTitle,
     InvalidConsole,
-    GczDecompressionFailed,
+    Gcz,
 }
 
 impl std::fmt::Display for Error {
@@ -17,7 +17,7 @@ impl std::fmt::Display for Error {
             Self::InvalidGameId => f.write_str("invalid game ID"),
             Self::InvalidGameTitle => f.write_str("invalid game title"),
             Self::InvalidConsole => f.write_str("invalid console"),
-            Self::GczDecompressionFailed => f.write_str("GCZ decompression failed"),
+            Self::Gcz => f.write_str("GCZ decompression failed"),
         }
     }
 }
@@ -39,6 +39,6 @@ impl From<std::io::Error> for Error {
 
 impl From<miniz_oxide::inflate::DecompressError> for Error {
     fn from(_: miniz_oxide::inflate::DecompressError) -> Self {
-        Self::GczDecompressionFailed
+        Self::Gcz
     }
 }
