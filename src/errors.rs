@@ -17,7 +17,7 @@ impl std::fmt::Display for Error {
             Self::InvalidGameId => f.write_str("invalid game ID"),
             Self::InvalidGameTitle => f.write_str("invalid game title"),
             Self::InvalidConsole => f.write_str("invalid console"),
-            Self::Gcz => f.write_str("GCZ decompression failed"),
+            Self::Gcz => f.write_str("GCZ read failed"),
         }
     }
 }
