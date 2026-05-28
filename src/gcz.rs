@@ -5,6 +5,8 @@ use crate::{Error, HEADER_SIZE};
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use std::io::{self, Read};
 
+const PTRS_IN_HEADER: u64 = (HEADER_SIZE as u64 - 0x20) / 8;
+
 pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(), Error> {
     // Parse metadata
     let num_blocks = u32::from_le_bytes(header[0x1C..0x20].try_into().unwrap()) as u64;
@@ -17,7 +19,8 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     let compressed_size = (blk1_offset - blk0_offset) as usize;
 
     // Skip to the beginning of block 0
-    let mut skip = (num_blocks - 8) * 8 + num_blocks * 4;
+    let remaining_ptrs = num_blocks.saturating_sub(PTRS_IN_HEADER);
+    let mut skip = remaining_ptrs * 8 + num_blocks * 4;
     if blk0_offset > 0 {
         skip += blk0_offset;
     }
