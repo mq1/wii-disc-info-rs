@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{Error, HEADER_SIZE};
-use miniz_oxide::inflate::decompress_to_vec_zlib;
 use std::io::{self, Read};
 
 const PTRS_IN_HEADER: u64 = (HEADER_SIZE as u64 - 0x20) / 8;
@@ -33,7 +32,12 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     let decompressed = if blk0_ptr & (1u64 << 63) != 0 {
         block_data // Uncompressed
     } else {
-        decompress_to_vec_zlib(&block_data).map_err(|_| Error::GczDecompressionFailed)?
+        #[cfg(not(feature = "deflate"))]
+        return Err(Error::GczDecompressionFailed);
+
+        #[cfg(feature = "deflate")]
+        miniz_oxide::inflate::decompress_to_vec_zlib(&block_data)
+            .map_err(|_| Error::GczDecompressionFailed)?
     };
 
     // Copy to Header Buffer
