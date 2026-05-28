@@ -5,6 +5,7 @@
 
 mod errors;
 mod formats;
+mod gcz;
 mod regions;
 
 pub use errors::Error;
@@ -43,6 +44,11 @@ impl Meta {
                 io::copy(&mut reader.take(skip), &mut io::sink())?;
                 reader.read_exact(&mut header)?;
             }
+        }
+
+        // Decompress header if GCZ
+        if format == Format::Gcz {
+            gcz::read(reader, &mut header)?;
         }
 
         // Validate Console

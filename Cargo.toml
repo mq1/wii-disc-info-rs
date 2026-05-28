@@ -1,6 +1,6 @@
 [package]
 name = "wii-disc-info"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -8,6 +8,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/mq1/wii-disc-info-rs"
 homepage = "https://github.com/mq1/wii-disc-info-rs"
 description = "Query info about wii disc files (without requiring Seek)"
+
+[dependencies]
+miniz_oxide = "0.9"
 
 [profile.release]
 opt-level = "z"

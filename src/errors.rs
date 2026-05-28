@@ -7,6 +7,7 @@ pub enum Error {
     InvalidGameId,
     InvalidGameTitle,
     InvalidConsole,
+    GczDecompressionFailed,
 }
 
 impl std::fmt::Display for Error {
@@ -16,6 +17,7 @@ impl std::fmt::Display for Error {
             Self::InvalidGameId => f.write_str("invalid game ID"),
             Self::InvalidGameTitle => f.write_str("invalid game title"),
             Self::InvalidConsole => f.write_str("invalid console"),
+            Self::GczDecompressionFailed => f.write_str("GCZ decompression failed"),
         }
     }
 }

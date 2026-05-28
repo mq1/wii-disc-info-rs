@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::HEADER_SIZE;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Iso,
@@ -9,6 +11,7 @@ pub enum Format {
     Rvz,
     Wia,
     Tgc,
+    Gcz,
 }
 
 impl std::fmt::Display for Format {
@@ -20,6 +23,7 @@ impl std::fmt::Display for Format {
             Self::Rvz => "RVZ",
             Self::Wia => "WIA",
             Self::Tgc => "TGC",
+            Self::Gcz => "GCZ",
         };
 
         f.write_str(name)
@@ -32,19 +36,20 @@ impl Format {
             Format::Wbfs => 0x200,
             Format::Ciso | Format::Tgc => 0x8000,
             Format::Rvz | Format::Wia => 0x58,
-            Format::Iso => 0,
+            Format::Iso | Format::Gcz => 0,
         }
     }
 }
 
-impl From<&[u8; 96]> for Format {
-    fn from(header: &[u8; 96]) -> Self {
-        match header[..4] {
+impl From<&[u8; HEADER_SIZE]> for Format {
+    fn from(header: &[u8; HEADER_SIZE]) -> Self {
+        match header[0..4] {
             [b'W', b'B', b'F', b'S'] => Self::Wbfs,
             [b'C', b'I', b'S', b'O'] => Self::Ciso,
             [b'R', b'V', b'Z', 0x01] => Self::Rvz,
             [b'W', b'I', b'A', 0x01] => Self::Wia,
             [0xae, 0x0f, 0x38, 0xa2] => Self::Tgc,
+            [0x01, 0xc0, 0x0b, 0xb1] => Self::Gcz,
             _ => Self::Iso,
         }
     }
