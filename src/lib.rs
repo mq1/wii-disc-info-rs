@@ -10,93 +10,67 @@ mod regions;
 pub use errors::Error;
 pub use formats::Format;
 pub use regions::RegionCode;
-use std::io::Read;
+use std::io::{self, Read};
+
+const HEADER_SIZE: usize = 0x60;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     format: Format,
-    game_id: [u8; 6],
-    game_id_length: usize,
-    disc_number: u8,
-    disc_version: u8,
-    wii_magic: [u8; 4],
-    gc_magic: [u8; 4],
-    game_title: [u8; 64],
-    game_title_length: usize,
+    header: [u8; HEADER_SIZE],
+    game_id_len: usize,
+    game_title_len: usize,
 }
 
 impl Meta {
     pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut game_id = [0; 6];
-        reader.read_exact(&mut game_id)?;
+        let mut header = [0; HEADER_SIZE];
+        reader.read_exact(&mut header)?;
 
-        let format = {
-            let mut buf = [0; 4];
-            buf.copy_from_slice(&game_id[..4]);
-            Format::from(buf)
-        };
+        let format = Format::from(&header);
 
-        if let Some(padding) = format.initial_padding() {
-            std::io::copy(&mut reader.take(padding), &mut std::io::sink())?;
-            reader.read_exact(&mut game_id)?;
+        if let Some(pos) = format.header_pos() {
+            if HEADER_SIZE > pos {
+                let overflow = HEADER_SIZE - pos;
+                header.copy_within(pos.., 0);
+                reader.read_exact(&mut header[overflow..])?;
+            } else {
+                let skip = (pos - HEADER_SIZE) as u64;
+                io::copy(&mut reader.take(skip), &mut io::sink())?;
+                reader.read_exact(&mut header)?;
+            }
         }
 
-        let game_id_length = game_id.iter().position(|&b| b == 0).unwrap_or(6);
-        if !matches!(game_id_length, 4 | 6) {
+        // Check for game_id len
+        let game_id_len = header[0..6].iter().position(|&b| b == 0).unwrap_or(6);
+        if !matches!(game_id_len, 4 | 6) {
             return Err(Error::InvalidGameId);
         }
 
         // Check if game_id is uppercase alphanumeric
-        for b in &game_id[..game_id_length] {
-            if !matches!(b, b'A'..=b'Z' | b'0'..=b'9') {
-                return Err(Error::InvalidGameId);
-            }
+        if header[0..game_id_len]
+            .iter()
+            .any(|&b| !b.is_ascii_uppercase() && !b.is_ascii_digit())
+        {
+            return Err(Error::InvalidGameId);
         }
 
-        let disc_number = {
-            let mut buf = [0; 1];
-            reader.read_exact(&mut buf)?;
-            buf[0]
-        };
+        // check for game title len
+        let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(64);
+        if game_title_len == 0 {
+            return Err(Error::InvalidGameTitle);
+        }
 
-        let disc_version = {
-            let mut buf = [0; 1];
-            reader.read_exact(&mut buf)?;
-            buf[0]
-        };
-
-        // padding
-        std::io::copy(&mut reader.take(0x10), &mut std::io::sink())?;
-
-        let wii_magic = {
-            let mut buf = [0; 4];
-            reader.read_exact(&mut buf)?;
-            buf
-        };
-
-        let gc_magic = {
-            let mut buf = [0; 4];
-            reader.read_exact(&mut buf)?;
-            buf
-        };
-
-        let mut game_title = [0; 64];
-        reader.read_exact(&mut game_title)?;
-        let game_title_length = game_title.iter().position(|&b| b == 0).unwrap_or(64);
-        if str::from_utf8(&game_title[..game_title_length]).is_err() {
+        // check for game title validity
+        if str::from_utf8(&header[0x20..0x20 + game_title_len]).is_err() {
             return Err(Error::InvalidGameTitle);
         }
 
         let meta = Self {
             format,
-            game_id,
-            game_id_length,
-            disc_number,
-            disc_version,
-            wii_magic,
-            gc_magic,
-            game_title,
-            game_title_length,
+            header,
+            game_id_len,
+            game_title_len,
         };
 
         if !meta.is_wii() && !meta.is_gc() {
@@ -111,35 +85,35 @@ impl Meta {
     }
 
     pub fn game_id(&self) -> &str {
-        unsafe { str::from_utf8_unchecked(&self.game_id[..self.game_id_length]) }
+        unsafe { str::from_utf8_unchecked(&self.header[0..self.game_id_len]) }
     }
 
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.game_id == [b'R', b'L', b'W', b'W', b'7', b'8'] {
+        if self.header[0..6] == [b'R', b'L', b'W', b'W', b'7', b'8'] {
             return RegionCode::Scandinavia;
         }
 
-        RegionCode::from(self.game_id[3])
+        RegionCode::from(self.header[3])
     }
 
     pub fn disc_number(&self) -> u8 {
-        self.disc_number
+        self.header[6]
     }
 
     pub fn disc_version(&self) -> u8 {
-        self.disc_version
+        self.header[7]
     }
 
     pub fn is_wii(&self) -> bool {
-        self.wii_magic == [0x5D, 0x1C, 0x9E, 0xA3]
+        self.header[0x18..0x1c] == [0x5D, 0x1C, 0x9E, 0xA3]
     }
 
     pub fn is_gc(&self) -> bool {
-        self.gc_magic == [0xC2, 0x33, 0x9F, 0x3D]
+        self.header[0x1c..0x20] == [0xC2, 0x33, 0x9F, 0x3D]
     }
 
     pub fn game_title(&self) -> &str {
-        unsafe { str::from_utf8_unchecked(&self.game_title[..self.game_title_length]) }
+        unsafe { str::from_utf8_unchecked(&self.header[0x20..0x20 + self.game_title_len]) }
     }
 }
