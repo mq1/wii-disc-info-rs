@@ -27,12 +27,12 @@ impl std::fmt::Display for Format {
 }
 
 impl Format {
-    pub fn header_pos(self) -> Option<usize> {
+    pub fn header_pos(self) -> usize {
         match self {
-            Format::Wbfs => Some(0x200),
-            Format::Ciso | Format::Tgc => Some(0x8000),
-            Format::Rvz | Format::Wia => Some(0x58),
-            Format::Iso => None,
+            Format::Wbfs => 0x200,
+            Format::Ciso | Format::Tgc => 0x8000,
+            Format::Rvz | Format::Wia => 0x58,
+            Format::Iso => 0,
         }
     }
 }

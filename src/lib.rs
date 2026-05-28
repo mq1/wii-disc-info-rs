@@ -29,15 +29,19 @@ impl Meta {
 
         let format = Format::from(&header);
 
-        if let Some(pos) = format.header_pos() {
-            if HEADER_SIZE > pos {
-                let overflow = HEADER_SIZE - pos;
-                header.copy_within(pos.., 0);
-                reader.read_exact(&mut header[overflow..])?;
-            } else {
-                let skip = (pos - HEADER_SIZE) as u64;
-                io::copy(&mut reader.take(skip), &mut io::sink())?;
-                reader.read_exact(&mut header)?;
+        // Skip to the header position
+        {
+            let pos = format.header_pos();
+            if pos > 0 {
+                if HEADER_SIZE > pos {
+                    let overflow = HEADER_SIZE - pos;
+                    header.copy_within(pos.., 0);
+                    reader.read_exact(&mut header[overflow..])?;
+                } else {
+                    let skip = (pos - HEADER_SIZE) as u64;
+                    io::copy(&mut reader.take(skip), &mut io::sink())?;
+                    reader.read_exact(&mut header)?;
+                }
             }
         }
 
