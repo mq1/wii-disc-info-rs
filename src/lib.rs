@@ -23,6 +23,7 @@ pub struct Meta {
     header: [u8; HEADER_SIZE],
     game_id_len: u8,
     game_title_len: u8,
+    is_wii: bool,
 }
 
 impl Meta {
@@ -88,6 +89,7 @@ impl Meta {
             header,
             game_id_len: game_id_len as u8,
             game_title_len: game_title_len as u8,
+            is_wii,
         })
     }
 
@@ -118,11 +120,11 @@ impl Meta {
     }
 
     pub fn is_wii(&self) -> bool {
-        self.header[0x18..0x1c] == WII_MAGIC
+        self.is_wii
     }
 
     pub fn is_gc(&self) -> bool {
-        self.header[0x1c..0x20] == GC_MAGIC
+        !self.is_wii
     }
 
     pub fn game_title(&self) -> &str {
