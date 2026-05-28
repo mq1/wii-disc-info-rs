@@ -15,6 +15,9 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     // Calculate compressed size
     let blk0_offset = blk0_ptr & !(1u64 << 63);
     let blk1_offset = blk1_ptr & !(1u64 << 63);
+    if blk0_offset >= blk1_offset {
+        return Err(Error::GczDecompressionFailed);
+    }
     let compressed_size = (blk1_offset - blk0_offset) as usize;
 
     // Skip to the beginning of block 0
@@ -41,7 +44,10 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     };
 
     // Copy to Header Buffer
-    header.copy_from_slice(&decompressed[..HEADER_SIZE]);
+    let new_header = decompressed
+        .first_chunk::<HEADER_SIZE>()
+        .ok_or(Error::GczDecompressionFailed)?;
+    header.copy_from_slice(new_header);
 
     Ok(())
 }
