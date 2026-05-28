@@ -4,11 +4,9 @@
 use crate::{Error, HEADER_SIZE};
 use std::io::{self, Read};
 
-const PTRS_IN_HEADER: u64 = (HEADER_SIZE as u64 - 0x20) / 8;
-
 pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(), Error> {
     // Parse metadata
-    let num_blocks = u32::from_le_bytes(header[0x1C..0x20].try_into().unwrap()) as u64;
+    let num_blocks = u32::from_le_bytes(header[0x1C..0x20].try_into().unwrap());
     let blk0_ptr = u64::from_le_bytes(header[0x20..0x28].try_into().unwrap());
     let blk1_ptr = u64::from_le_bytes(header[0x28..0x30].try_into().unwrap());
 
@@ -21,11 +19,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     let compressed_size = (blk1_offset - blk0_offset) as usize;
 
     // Skip to the beginning of block 0
-    let remaining_ptrs = num_blocks.saturating_sub(PTRS_IN_HEADER);
-    let mut skip = remaining_ptrs * 8 + num_blocks * 4;
-    if blk0_offset > 0 {
-        skip += blk0_offset;
-    }
+    let skip = (num_blocks as u64 * 12).saturating_sub(HEADER_SIZE as u64 - 0x20);
     io::copy(&mut reader.take(skip), &mut io::sink())?;
 
     // Read and Decompress
