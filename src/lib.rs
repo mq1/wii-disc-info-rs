@@ -42,7 +42,7 @@ impl Meta {
             Format::Rvz | Format::Wia => buf[0x58..0x58 + HEADER_SIZE].try_into().unwrap(),
             Format::Ciso | Format::Tgc => {
                 reader.read_exact(&mut buf)?;
-                buf[0x8000..0x8000 + HEADER_SIZE].try_into().unwrap()
+                buf[0..HEADER_SIZE].try_into().unwrap()
             }
             Format::Gcz => gcz::read(reader, &buf[..])?,
         };
