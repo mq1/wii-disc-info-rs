@@ -39,17 +39,23 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     io::copy(&mut reader.take(skip), &mut io::sink())?;
 
     // Read and decompress block 0
-    let mut block_data = vec![0u8; compressed_size];
-    reader.read_exact(&mut block_data)?;
+    let mut buf = Box::new_uninit_slice(compressed_size);
+    let slice = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), compressed_size) };
+    reader.read_exact(slice)?;
+    let block_data = unsafe { buf.assume_init() };
 
-    let decompressed = if blk0_ptr & (1u64 << 63) != 0 {
-        block_data // Uncompressed
+    let decompressed: &[u8] = if blk0_ptr & (1u64 << 63) != 0 {
+        &block_data // Uncompressed
     } else {
         #[cfg(not(feature = "deflate"))]
         return Err(Error::Gcz);
 
         #[cfg(feature = "deflate")]
-        miniz_oxide::inflate::decompress_to_vec_zlib(&block_data)?
+        &match miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&block_data, HEADER_SIZE) {
+            Ok(decompressed) => decompressed,
+            Err(e) if e.status == miniz_oxide::inflate::TINFLStatus::HasMoreOutput => e.output,
+            Err(_) => return Err(Error::Gcz),
+        }
     };
 
     // Copy to header buffer
