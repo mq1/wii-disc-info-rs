@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::HEADER_SIZE;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Iso,
@@ -31,7 +29,7 @@ impl std::fmt::Display for Format {
 }
 
 impl Format {
-    pub fn header_pos(self) -> usize {
+    pub const fn header_offset(self) -> usize {
         match self {
             Format::Wbfs => 0x200,
             Format::Ciso | Format::Tgc => 0x8000,
@@ -41,8 +39,8 @@ impl Format {
     }
 }
 
-impl From<&[u8; HEADER_SIZE]> for Format {
-    fn from(header: &[u8; HEADER_SIZE]) -> Self {
+impl Format {
+    pub fn parse_header(header: &[u8]) -> Self {
         match header[0..4] {
             [b'W', b'B', b'F', b'S'] => Self::Wbfs,
             [b'C', b'I', b'S', b'O'] => Self::Ciso,
