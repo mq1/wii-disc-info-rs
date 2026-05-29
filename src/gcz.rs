@@ -32,6 +32,7 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
         blk1_offset as usize
     };
 
+    // Check compressed size is reasonable (avoid OOM)
     if compressed_size > 1024 * 1024 {
         return Err(Error::Gcz);
     }
