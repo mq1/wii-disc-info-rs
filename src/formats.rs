@@ -29,17 +29,6 @@ impl std::fmt::Display for Format {
 }
 
 impl Format {
-    pub const fn header_offset(self) -> usize {
-        match self {
-            Format::Wbfs => 0x200,
-            Format::Ciso | Format::Tgc => 0x8000,
-            Format::Rvz | Format::Wia => 0x58,
-            Format::Iso | Format::Gcz => 0,
-        }
-    }
-}
-
-impl Format {
     pub fn parse_header(header: &[u8]) -> Self {
         match header[0..4] {
             [b'W', b'B', b'F', b'S'] => Self::Wbfs,

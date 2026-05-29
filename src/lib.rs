@@ -27,7 +27,7 @@ pub struct Meta {
 
 impl Meta {
     pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
-        let buf = {
+        let mut buf = {
             let mut buf = Box::new_uninit_slice(BUF_SIZE);
             let buf_slice =
                 unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), BUF_SIZE) };
@@ -37,11 +37,14 @@ impl Meta {
 
         let format = Format::parse_header(&buf[..]);
         let header = match format {
-            Format::Gcz => gcz::read(reader, &buf[..])?,
-            _ => {
-                let offset = format.header_offset();
-                buf[offset..offset + HEADER_SIZE].try_into().unwrap()
+            Format::Iso => buf[0..HEADER_SIZE].try_into().unwrap(),
+            Format::Wbfs => buf[0x200..0x200 + HEADER_SIZE].try_into().unwrap(),
+            Format::Rvz | Format::Wia => buf[0x58..0x58 + HEADER_SIZE].try_into().unwrap(),
+            Format::Ciso | Format::Tgc => {
+                reader.read_exact(&mut buf)?;
+                buf[0x8000..0x8000 + HEADER_SIZE].try_into().unwrap()
             }
+            Format::Gcz => gcz::read(reader, &buf[..])?,
         };
 
         // Validate Console
