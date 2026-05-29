@@ -32,6 +32,10 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
         blk1_offset as usize
     };
 
+    if compressed_size > 1024 * 1024 {
+        return Err(Error::Gcz);
+    }
+
     // Skip the remainder of the block pointer + hash tables
     // Reader is currently at byte HEADER_SIZE; data region starts at 0x20 + num_blocks * 12
     let data_start = 0x20 + num_blocks as u64 * 12;
