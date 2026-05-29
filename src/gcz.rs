@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::HEADER_SIZE;
+use crate::{BUF_SIZE, HEADER_SIZE};
 use std::io::{self, Read};
 
 pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEADER_SIZE]> {
-    let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap());
+    let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap()) as usize;
     if num_blocks == 0 {
         return Err(io::Error::from(io::ErrorKind::InvalidData));
     }
@@ -39,32 +39,19 @@ pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEA
 
     // Skip the remainder of the block pointer + hash tables
     // Data region starts at 0x20 + num_blocks * 12
-    let data_start = 0x20 + num_blocks as u64 * 12;
-    let initial_len = initial_data.len() as u64;
+    let data_start = 0x20 + num_blocks * 12;
 
     // Read and decompress block 0
     let mut buf = Box::new_uninit_slice(compressed_size);
     let slice = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), compressed_size) };
 
-    if initial_len < data_start {
-        // We haven't reached the data region in initial_data
-        let skip = data_start - initial_len;
+    if let Some(overlap) = BUF_SIZE.checked_sub(data_start) {
+        slice[..overlap].copy_from_slice(&initial_data[data_start..]);
+        reader.read_exact(&mut slice[overlap..])?;
+    } else {
+        let skip = (data_start - BUF_SIZE) as u64;
         io::copy(&mut reader.take(skip), &mut io::sink())?;
         reader.read_exact(slice)?;
-    } else {
-        // initial_data overlaps with the data region for block 0
-        let overlap = (initial_len - data_start) as usize;
-        let provided = overlap.min(compressed_size);
-        let data_start_usize = data_start as usize;
-
-        // Copy whatever we already have in memory
-        slice[..provided]
-            .copy_from_slice(&initial_data[data_start_usize..data_start_usize + provided]);
-
-        // Only hit the reader for any bytes that initial_data didn't cover
-        if provided < compressed_size {
-            reader.read_exact(&mut slice[provided..])?;
-        }
     }
 
     let block_data = unsafe { buf.assume_init() };
