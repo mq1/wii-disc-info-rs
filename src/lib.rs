@@ -3,12 +3,10 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod errors;
 mod formats;
 mod gcz;
 mod regions;
 
-pub use errors::Error;
 pub use formats::Format;
 pub use regions::RegionCode;
 use std::io::{self, Read};
@@ -16,6 +14,7 @@ use std::io::{self, Read};
 const HEADER_SIZE: usize = 0x60;
 const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
 const GC_MAGIC: [u8; 4] = [0xC2, 0x33, 0x9F, 0x3D];
+const BUF_SIZE: usize = 0x8000; // 32 KiB
 
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
@@ -27,42 +26,35 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut header = [0; HEADER_SIZE];
-        reader.read_exact(&mut header)?;
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
+        let buf = {
+            let mut buf = Box::new_uninit_slice(BUF_SIZE);
+            let buf_slice =
+                unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), BUF_SIZE) };
+            reader.read_exact(buf_slice)?;
+            unsafe { buf.assume_init() }
+        };
 
-        let format = Format::from(&header);
-        let header_pos = format.header_pos();
-
-        // Skip to the header position without using Seek
-        if header_pos > 0 {
-            if HEADER_SIZE > header_pos {
-                let overlap = HEADER_SIZE - header_pos;
-                header.copy_within(header_pos.., 0);
-                reader.read_exact(&mut header[overlap..])?;
-            } else {
-                let skip = (header_pos - HEADER_SIZE) as u64;
-                io::copy(&mut reader.take(skip), &mut io::sink())?;
-                reader.read_exact(&mut header)?;
+        let format = Format::parse_header(&buf[..]);
+        let header = match format {
+            Format::Gcz => gcz::read(reader, &buf[..])?,
+            _ => {
+                let offset = format.header_offset();
+                buf[offset..offset + HEADER_SIZE].try_into().unwrap()
             }
-        }
-
-        // Decompress header if GCZ
-        if format == Format::Gcz {
-            gcz::read(reader, &mut header)?;
-        }
+        };
 
         // Validate Console
         let is_wii = header[0x18..0x1c] == WII_MAGIC;
         let is_gc = header[0x1c..0x20] == GC_MAGIC;
         if is_wii == is_gc {
-            return Err(Error::InvalidConsole);
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         // Validate Game ID length
         let game_id_len = header[0..6].iter().position(|&b| b == 0).unwrap_or(6);
         if !matches!(game_id_len, 4 | 6) {
-            return Err(Error::InvalidGameId);
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         // Validate Game ID
@@ -70,18 +62,18 @@ impl Meta {
             .iter()
             .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
-            return Err(Error::InvalidGameId);
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         // Validate Game Title length
         let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(64);
         if game_title_len == 0 {
-            return Err(Error::InvalidGameTitle);
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         // Validate Game Title
         if str::from_utf8(&header[0x20..0x20 + game_title_len]).is_err() {
-            return Err(Error::InvalidGameTitle);
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         Ok(Self {
