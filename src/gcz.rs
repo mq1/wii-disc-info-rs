@@ -35,7 +35,11 @@ pub fn read<R: Read>(reader: &mut R, header: &mut [u8; HEADER_SIZE]) -> Result<(
     // Skip the remainder of the block pointer + hash tables
     // Reader is currently at byte HEADER_SIZE; data region starts at 0x20 + num_blocks * 12
     let data_start = 0x20 + num_blocks as u64 * 12;
-    let skip = data_start.saturating_sub(HEADER_SIZE as u64);
+    if HEADER_SIZE as u64 > data_start {
+        // this implies blocks are < 6 (highly likely to be corrupt)
+        return Err(Error::Gcz);
+    }
+    let skip = data_start - HEADER_SIZE as u64;
     io::copy(&mut reader.take(skip), &mut io::sink())?;
 
     // Read and decompress block 0
