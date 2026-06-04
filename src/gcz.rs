@@ -43,7 +43,8 @@ pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEA
 
     // Read and decompress block 0
     let mut buf = Box::new_uninit_slice(compressed_size);
-    let slice = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), compressed_size) };
+    let ptr = buf.as_mut_ptr().cast::<u8>();
+    let slice = unsafe { std::slice::from_raw_parts_mut(ptr, compressed_size) };
 
     if let Some(overlap) = BUF_SIZE.checked_sub(data_start) {
         slice[..overlap].copy_from_slice(&initial_data[data_start..]);
@@ -54,26 +55,40 @@ pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEA
         reader.read_exact(slice)?;
     }
 
+    // SAFETY: read_exact would have thrown an error, so buf is surely fully written at this point
     let block_data = unsafe { buf.assume_init() };
 
-    let decompressed: &[u8] = if blk0_ptr & (1u64 << 63) != 0 {
-        &block_data // Uncompressed
+    if blk0_ptr & (1u64 << 63) != 0 {
+        // Uncompressed
+        let header = block_data
+            .first_chunk::<HEADER_SIZE>()
+            .ok_or(io::Error::from(io::ErrorKind::InvalidData))?;
+
+        Ok(*header)
     } else {
         #[cfg(not(feature = "deflate"))]
-        return Err(io::Error::from(io::ErrorKind::InvalidData));
+        {
+            Err(io::Error::from(io::ErrorKind::InvalidData))
+        }
 
         #[cfg(feature = "deflate")]
-        &match miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&block_data, HEADER_SIZE) {
-            Ok(decompressed) => decompressed,
-            Err(e) if e.status == miniz_oxide::inflate::TINFLStatus::HasMoreOutput => e.output,
-            Err(_) => return Err(io::Error::from(io::ErrorKind::InvalidData)),
+        {
+            let mut buf = [0u8; HEADER_SIZE];
+
+            let res = miniz_oxide::inflate::decompress_slice_iter_to_slice(
+                &mut buf,
+                std::iter::once(block_data.as_ref()),
+                true,
+                false,
+            );
+
+            if let Err(status) = res
+                && status != miniz_oxide::inflate::TINFLStatus::HasMoreOutput
+            {
+                return Err(io::Error::from(io::ErrorKind::InvalidData));
+            }
+
+            Ok(buf)
         }
-    };
-
-    // Get the header
-    let header = decompressed
-        .first_chunk::<HEADER_SIZE>()
-        .ok_or(io::Error::from(io::ErrorKind::InvalidData))?;
-
-    Ok(*header)
+    }
 }

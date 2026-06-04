@@ -14,7 +14,7 @@ default = ["deflate"]
 deflate = ["miniz_oxide"]
 
 [dependencies]
-miniz_oxide = { version = "0.9", optional = true }
+miniz_oxide = { version = "0.9", optional = true, default-features = false }
 
 [profile.release]
 opt-level = "z"

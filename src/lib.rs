@@ -29,9 +29,11 @@ impl Meta {
     pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
         let mut buf = {
             let mut buf = Box::new_uninit_slice(BUF_SIZE);
-            let buf_slice =
-                unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast(), BUF_SIZE) };
+            let ptr = buf.as_mut_ptr().cast::<u8>();
+            let buf_slice = unsafe { std::slice::from_raw_parts_mut(ptr, BUF_SIZE) };
             reader.read_exact(buf_slice)?;
+
+            // SAFETY: read_exact would have thrown an error
             unsafe { buf.assume_init() }
         };
 
@@ -99,7 +101,7 @@ impl Meta {
 
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.header[0..6] == *b"RLWW78" {
+        if self.header[0..6] == [b'R', b'L', b'W', b'W', b'7', b'8'] {
             return RegionCode::Scandinavia;
         }
 
@@ -124,6 +126,8 @@ impl Meta {
 
     pub fn game_title(&self) -> &str {
         let len = self.game_title_len as usize;
+
+        // SAFETY: game_title is validated in Meta::read
         unsafe { str::from_utf8_unchecked(&self.header[0x20..0x20 + len]) }
     }
 }
