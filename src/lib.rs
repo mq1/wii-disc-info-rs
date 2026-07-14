@@ -8,7 +8,11 @@ mod gcz;
 mod regions;
 
 pub use formats::Format;
-use futures::{AsyncRead, AsyncReadExt, io};
+use futures_lite::{
+    AsyncRead, AsyncReadExt,
+    future::block_on,
+    io::{self, AssertAsync},
+};
 pub use regions::RegionCode;
 
 const HEADER_SIZE: usize = 0x60;
@@ -90,12 +94,9 @@ impl Meta {
         })
     }
 
-    #[cfg(feature = "blocking")]
-    pub fn blocking_read<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        futures::executor::block_on(async {
-            let mut reader = futures::io::AllowStdIo::new(reader);
-            Self::read(&mut reader).await
-        })
+    pub fn read_blocking<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut reader = AssertAsync::new(reader);
+        block_on(Self::read(&mut reader))
     }
 
     pub fn format(&self) -> Format {

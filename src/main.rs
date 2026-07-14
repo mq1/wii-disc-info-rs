@@ -3,10 +3,9 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-#[cfg(feature = "cli")]
-fn main() {
-    use std::io::IsTerminal;
+use std::io::IsTerminal;
 
+fn main() {
     let mut reader = std::io::stdin();
 
     if reader.is_terminal() {
@@ -14,7 +13,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let info = wii_disc_info::Meta::blocking_read(&mut reader).unwrap();
+    let info = wii_disc_info::Meta::read_blocking(&mut reader).unwrap();
 
     println!("Format: {}", info.format());
     println!("Game ID: {}", info.game_id());
@@ -24,9 +23,4 @@ fn main() {
     println!("Is Wii: {}", info.is_wii());
     println!("Is GameCube: {}", info.is_gc());
     println!("Game Title: {}", info.game_title());
-}
-
-#[cfg(not(feature = "cli"))]
-fn main() {
-    println!("Please add the `cli` feature to enable the CLI");
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{BUF_SIZE, HEADER_SIZE};
-use futures::{AsyncRead, AsyncReadExt, io};
+use futures_lite::{AsyncRead, AsyncReadExt, io};
 
 pub async fn read<R: AsyncRead + Unpin>(
     reader: &mut R,
