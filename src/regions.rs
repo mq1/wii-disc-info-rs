@@ -27,9 +27,9 @@ pub enum RegionCode {
     Unknown,
 }
 
-impl std::fmt::Display for RegionCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
+impl RegionCode {
+    fn as_str(&self) -> &'static str {
+        match self {
             Self::SystemWiiChannels => "System Wii Channels (i.e. Mii Channel)",
             Self::UfouriaTheSagaNA => "Ufouria: The Saga (NA)",
             Self::Germany => "Germany",
@@ -64,37 +64,47 @@ impl std::fmt::Display for RegionCode {
                 "Europe alternate languages / US special releases"
             }
             Self::Unknown => "Unknown",
-        };
+        }
+    }
+}
 
-        f.write_str(name)
+impl std::fmt::Display for RegionCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+impl From<char> for RegionCode {
+    fn from(c: char) -> Self {
+        match c {
+            'A' => Self::SystemWiiChannels,
+            'B' => Self::UfouriaTheSagaNA,
+            'D' => Self::Germany,
+            'E' => Self::USA,
+            'F' => Self::France,
+            'H' => Self::NetherlandsEuropeAlternateLanguages,
+            'I' => Self::Italy,
+            'J' => Self::Japan,
+            'K' => Self::Korea,
+            'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
+            'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
+            'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
+            'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
+            'Q' => Self::JapaneseVirtualConsoleImportToKorea,
+            'R' => Self::Russia,
+            'S' => Self::Spain,
+            'T' => Self::AmericanVirtualConsoleImportToKorea,
+            'U' => Self::AustraliaEuropeAlternateLanguages,
+            'V' => Self::Scandinavia,
+            'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
+            'X' | 'Y' | 'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
+            _ => Self::Unknown,
+        }
     }
 }
 
 impl From<u8> for RegionCode {
     fn from(b: u8) -> Self {
-        match b {
-            b'A' => Self::SystemWiiChannels,
-            b'B' => Self::UfouriaTheSagaNA,
-            b'D' => Self::Germany,
-            b'E' => Self::USA,
-            b'F' => Self::France,
-            b'H' => Self::NetherlandsEuropeAlternateLanguages,
-            b'I' => Self::Italy,
-            b'J' => Self::Japan,
-            b'K' => Self::Korea,
-            b'L' => Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions,
-            b'M' => Self::AmericanImportToEuropeAustraliaAndOtherPALRegions,
-            b'N' => Self::JapaneseImportToUSAAndOtherNTSCRegions,
-            b'P' => Self::EuropeAndOtherPALRegionsSuchAsAustralia,
-            b'Q' => Self::JapaneseVirtualConsoleImportToKorea,
-            b'R' => Self::Russia,
-            b'S' => Self::Spain,
-            b'T' => Self::AmericanVirtualConsoleImportToKorea,
-            b'U' => Self::AustraliaEuropeAlternateLanguages,
-            b'V' => Self::Scandinavia,
-            b'W' => Self::RepublicOfChinaTaiwanHongKongMacau,
-            b'X' | b'Y' | b'Z' => Self::EuropeAlternateLanguagesUSSpecialReleases,
-            _ => Self::Unknown,
-        }
+        Self::from(b as char)
     }
 }
