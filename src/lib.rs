@@ -8,8 +8,8 @@ mod gcz;
 mod regions;
 
 pub use formats::Format;
+use futures::{AsyncRead, AsyncReadExt, io};
 pub use regions::RegionCode;
-use std::io::{self, Read};
 
 const HEADER_SIZE: usize = 0x60;
 const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
@@ -26,12 +26,12 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
+    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Self> {
         let mut buf = {
             let mut buf = Box::new_uninit_slice(BUF_SIZE);
             let ptr = buf.as_mut_ptr().cast::<u8>();
             let buf_slice = unsafe { std::slice::from_raw_parts_mut(ptr, BUF_SIZE) };
-            reader.read_exact(buf_slice)?;
+            reader.read_exact(buf_slice).await?;
 
             // SAFETY: read_exact would have thrown an error
             unsafe { buf.assume_init() }
@@ -43,10 +43,10 @@ impl Meta {
             Format::Wbfs => buf[0x200..0x200 + HEADER_SIZE].try_into().unwrap(),
             Format::Rvz | Format::Wia => buf[0x58..0x58 + HEADER_SIZE].try_into().unwrap(),
             Format::Ciso | Format::Tgc => {
-                reader.read_exact(&mut buf)?;
+                reader.read_exact(&mut buf).await?;
                 buf[0..HEADER_SIZE].try_into().unwrap()
             }
-            Format::Gcz => gcz::read(reader, &buf[..])?,
+            Format::Gcz => gcz::read(reader, &buf[..]).await?,
         };
 
         // Validate Console
@@ -87,6 +87,14 @@ impl Meta {
             game_id_len: game_id_len as u8,
             game_title_len: game_title_len as u8,
             is_wii,
+        })
+    }
+
+    #[cfg(feature = "blocking")]
+    pub fn blocking_read<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        futures::executor::block_on(async {
+            let mut reader = futures::io::AllowStdIo::new(reader);
+            Self::read(&mut reader).await
         })
     }
 

@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{BUF_SIZE, HEADER_SIZE};
-use std::io::{self, Read};
+use futures::{AsyncRead, AsyncReadExt, io};
 
-pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEADER_SIZE]> {
+pub async fn read<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    initial_data: &[u8],
+) -> io::Result<[u8; HEADER_SIZE]> {
     let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap()) as usize;
     if num_blocks == 0 {
         return Err(io::Error::from(io::ErrorKind::InvalidData));
@@ -48,11 +51,11 @@ pub fn read<R: Read>(reader: &mut R, initial_data: &[u8]) -> io::Result<[u8; HEA
 
     if let Some(overlap) = BUF_SIZE.checked_sub(data_start) {
         slice[..overlap].copy_from_slice(&initial_data[data_start..]);
-        reader.read_exact(&mut slice[overlap..])?;
+        reader.read_exact(&mut slice[overlap..]).await?;
     } else {
         let skip = (data_start - BUF_SIZE) as u64;
-        io::copy(&mut reader.take(skip), &mut io::sink())?;
-        reader.read_exact(slice)?;
+        io::copy(&mut reader.take(skip), &mut io::sink()).await?;
+        reader.read_exact(slice).await?;
     }
 
     // SAFETY: read_exact would have thrown an error, so buf is surely fully written at this point
