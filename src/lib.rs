@@ -63,7 +63,7 @@ impl Meta {
         }
 
         // Validate Game ID
-        if !game_id
+        if !game_id[0..game_id_len]
             .iter()
             .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
