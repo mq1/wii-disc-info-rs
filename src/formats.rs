@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use strum_macros::{Display, IntoStaticStr};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, IntoStaticStr)]
+#[strum(serialize_all = "UPPERCASE")]
 pub enum Format {
     Iso,
     Wbfs,
@@ -12,23 +15,8 @@ pub enum Format {
     Gcz,
 }
 
-impl std::fmt::Display for Format {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            Self::Iso => "ISO",
-            Self::Wbfs => "WBFS",
-            Self::Ciso => "CISO",
-            Self::Rvz => "RVZ",
-            Self::Wia => "WIA",
-            Self::Tgc => "TGC",
-            Self::Gcz => "GCZ",
-        };
-
-        f.write_str(name)
-    }
-}
-
 impl Format {
+    #[must_use]
     pub fn parse_header(header: &[u8]) -> Self {
         match header[0..4] {
             [b'W', b'B', b'F', b'S'] => Self::Wbfs,

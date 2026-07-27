@@ -3,16 +3,14 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
+pub mod errors;
 mod formats;
 mod gcz;
 mod regions;
 
+use crate::errors::Error;
 pub use formats::Format;
-use futures_lite::{
-    AsyncRead, AsyncReadExt,
-    future::block_on,
-    io::{self, AssertAsync},
-};
+use futures_lite::{AsyncRead, AsyncReadExt, future::block_on, io::AssertAsync};
 pub use regions::RegionCode;
 
 const HEADER_SIZE: usize = 0x60;
@@ -30,7 +28,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Self> {
+    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self, Error> {
         let mut buf = {
             let mut buf = Box::new_uninit_slice(BUF_SIZE);
             let ptr = buf.as_mut_ptr().cast::<u8>();
@@ -57,13 +55,13 @@ impl Meta {
         let is_wii = header[0x18..0x1c] == WII_MAGIC;
         let is_gc = header[0x1c..0x20] == GC_MAGIC;
         if is_wii == is_gc {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::InvalidConsole);
         }
 
         // Validate Game ID length
         let game_id_len = header[0..6].iter().position(|&b| b == 0).unwrap_or(6);
         if !matches!(game_id_len, 4 | 6) {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::InvalidGameId);
         }
 
         // Validate Game ID
@@ -71,18 +69,18 @@ impl Meta {
             .iter()
             .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::InvalidGameId);
         }
 
         // Validate Game Title length
         let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(64);
         if game_title_len == 0 {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::InvalidGameTitle);
         }
 
         // Validate Game Title
         if str::from_utf8(&header[0x20..0x20 + game_title_len]).is_err() {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::InvalidGameTitle);
         }
 
         Ok(Self {
@@ -94,45 +92,53 @@ impl Meta {
         })
     }
 
-    pub fn read_blocking<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    pub fn read_blocking<R: std::io::Read>(reader: &mut R) -> Result<Self, Error> {
         let mut reader = AssertAsync::new(reader);
         block_on(Self::read(&mut reader))
     }
 
+    #[must_use]
     pub fn format(&self) -> Format {
         self.format
     }
 
+    #[must_use]
     pub fn game_id(&self) -> &str {
         let len = self.game_id_len as usize;
         unsafe { str::from_utf8_unchecked(&self.header[0..len]) }
     }
 
+    #[must_use]
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.header[0..6] == [b'R', b'L', b'W', b'W', b'7', b'8'] {
+        if self.header[0..6] == *b"RLWW78" {
             return RegionCode::Scandinavia;
         }
 
         RegionCode::from(self.header[3])
     }
 
+    #[must_use]
     pub fn disc_number(&self) -> u8 {
         self.header[6]
     }
 
+    #[must_use]
     pub fn disc_version(&self) -> u8 {
         self.header[7]
     }
 
+    #[must_use]
     pub fn is_wii(&self) -> bool {
         self.is_wii
     }
 
+    #[must_use]
     pub fn is_gc(&self) -> bool {
         !self.is_wii
     }
 
+    #[must_use]
     pub fn game_title(&self) -> &str {
         let len = self.game_title_len as usize;
 
