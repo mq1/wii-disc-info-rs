@@ -116,6 +116,12 @@ impl Meta {
 
     #[must_use]
     #[inline]
+    pub fn game_id_bytes(&self) -> &[u8; 6] {
+        &self.game_id
+    }
+
+    #[must_use]
+    #[inline]
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
         if self.game_id == *b"RLWW78" {
