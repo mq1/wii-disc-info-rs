@@ -12,32 +12,28 @@ use crate::errors::Error;
 pub use formats::Format;
 use futures_lite::{AsyncRead, AsyncReadExt, future::block_on, io::AssertAsync};
 pub use regions::RegionCode;
+use smol_str::SmolStr;
 
 const HEADER_SIZE: usize = 0x60;
 const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
 const GC_MAGIC: [u8; 4] = [0xC2, 0x33, 0x9F, 0x3D];
 const BUF_SIZE: usize = 0x8000; // 32 KiB
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Meta {
     format: Format,
-    header: [u8; HEADER_SIZE],
-    game_id_len: u8,
-    game_title_len: u8,
+    game_id: [u8; 6],
+    game_title: SmolStr,
     is_wii: bool,
+    disc_number: u8,
+    disc_version: u8,
 }
 
 impl Meta {
     pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self, Error> {
-        let mut buf = {
-            let mut buf = Box::new_uninit_slice(BUF_SIZE);
-            let ptr = buf.as_mut_ptr().cast::<u8>();
-            let buf_slice = unsafe { std::slice::from_raw_parts_mut(ptr, BUF_SIZE) };
-            reader.read_exact(buf_slice).await?;
+        let mut buf = vec![0u8; BUF_SIZE].into_boxed_slice();
 
-            // SAFETY: read_exact would have thrown an error
-            unsafe { buf.assume_init() }
-        };
+        reader.read_exact(&mut buf).await?;
 
         let format = Format::parse_header(&buf[..]);
         let header = match format {
@@ -58,14 +54,16 @@ impl Meta {
             return Err(Error::InvalidConsole);
         }
 
+        let game_id: [u8; 6] = header[0..6].try_into().unwrap();
+
         // Validate Game ID length
-        let game_id_len = header[0..6].iter().position(|&b| b == 0).unwrap_or(6);
-        if !matches!(game_id_len, 4 | 6) {
+        let game_id_len = game_id.iter().position(|&b| b == 0).unwrap_or(6);
+        if game_id_len < 4 {
             return Err(Error::InvalidGameId);
         }
 
         // Validate Game ID
-        if !header[0..game_id_len]
+        if !game_id
             .iter()
             .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
@@ -73,22 +71,26 @@ impl Meta {
         }
 
         // Validate Game Title length
-        let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(64);
+        let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(0x40);
         if game_title_len == 0 {
             return Err(Error::InvalidGameTitle);
         }
 
         // Validate Game Title
-        if str::from_utf8(&header[0x20..0x20 + game_title_len]).is_err() {
+        let Ok(game_title) = str::from_utf8(&header[0x20..0x20 + game_title_len]) else {
             return Err(Error::InvalidGameTitle);
-        }
+        };
+
+        let disc_number = header[6];
+        let disc_version = header[7];
 
         Ok(Self {
             format,
-            header,
-            game_id_len: game_id_len as u8,
-            game_title_len: game_title_len as u8,
+            game_id,
+            game_title: game_title.into(),
             is_wii,
+            disc_number,
+            disc_version,
         })
     }
 
@@ -98,51 +100,58 @@ impl Meta {
     }
 
     #[must_use]
+    #[inline]
     pub fn format(&self) -> Format {
         self.format
     }
 
     #[must_use]
+    #[inline]
     pub fn game_id(&self) -> &str {
-        let len = self.game_id_len as usize;
-        unsafe { str::from_utf8_unchecked(&self.header[0..len]) }
+        let len = if self.game_id[4] == 0 { 4 } else { 6 };
+
+        // SAFETY: game_id is validated in Meta::read
+        unsafe { str::from_utf8_unchecked(&self.game_id[0..len]) }
     }
 
     #[must_use]
+    #[inline]
     pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.header[0..6] == *b"RLWW78" {
+        if self.game_id == *b"RLWW78" {
             return RegionCode::Scandinavia;
         }
 
-        RegionCode::from(self.header[3])
+        RegionCode::from(self.game_id[3])
     }
 
     #[must_use]
+    #[inline]
     pub fn disc_number(&self) -> u8 {
-        self.header[6]
+        self.disc_number
     }
 
     #[must_use]
+    #[inline]
     pub fn disc_version(&self) -> u8 {
-        self.header[7]
+        self.disc_version
     }
 
     #[must_use]
+    #[inline]
     pub fn is_wii(&self) -> bool {
         self.is_wii
     }
 
     #[must_use]
+    #[inline]
     pub fn is_gc(&self) -> bool {
         !self.is_wii
     }
 
     #[must_use]
+    #[inline]
     pub fn game_title(&self) -> &str {
-        let len = self.game_title_len as usize;
-
-        // SAFETY: game_title is validated in Meta::read
-        unsafe { str::from_utf8_unchecked(&self.header[0x20..0x20 + len]) }
+        &self.game_title
     }
 }

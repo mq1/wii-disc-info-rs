@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("Invalid game title")]
     InvalidGameTitle,
+
+    #[error("Error reading GCZ")]
+    Gcz,
 }
 
 impl From<std::io::Error> for Error {

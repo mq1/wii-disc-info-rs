@@ -1,77 +1,75 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use strum_macros::{Display, IntoStaticStr};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, IntoStaticStr)]
 pub enum RegionCode {
+    #[strum(to_string = "System Wii Channels (i.e. Mii Channel)")]
     SystemWiiChannels,
+
+    #[strum(to_string = "Ufouria: The Saga (NA)")]
     UfouriaTheSagaNA,
+
+    #[strum(to_string = "Germany")]
     Germany,
+
+    #[strum(to_string = "USA")]
     USA,
+
+    #[strum(to_string = "France")]
     France,
+
+    #[strum(to_string = "Netherlands / Europe alternate languages")]
     NetherlandsEuropeAlternateLanguages,
+
+    #[strum(to_string = "Italy")]
     Italy,
+
+    #[strum(to_string = "Japan")]
     Japan,
+
+    #[strum(to_string = "Korea")]
     Korea,
+
+    #[strum(to_string = "Japanese import to Europe, Australia and other PAL regions")]
     JapaneseImportToEuropeAustraliaAndOtherPALRegions,
+
+    #[strum(to_string = "American import to Europe, Australia and other PAL regions")]
     AmericanImportToEuropeAustraliaAndOtherPALRegions,
+
+    #[strum(to_string = "Japanese import to USA and other NTSC regions")]
     JapaneseImportToUSAAndOtherNTSCRegions,
+
+    #[strum(to_string = "Europe and other PAL regions such as Australia")]
     EuropeAndOtherPALRegionsSuchAsAustralia,
+
+    #[strum(to_string = "Japanese Virtual Console import to Korea")]
     JapaneseVirtualConsoleImportToKorea,
+
+    #[strum(to_string = "Russia")]
     Russia,
+
+    #[strum(to_string = "Spain")]
     Spain,
+
+    #[strum(to_string = "American Virtual Console import to Korea")]
     AmericanVirtualConsoleImportToKorea,
+
+    #[strum(to_string = "Australia / Europe alternate languages")]
     AustraliaEuropeAlternateLanguages,
+
+    #[strum(to_string = "Scandinavia")]
     Scandinavia,
+
+    #[strum(to_string = "Republic of China (Taiwan) / Hong Kong / Macau")]
     RepublicOfChinaTaiwanHongKongMacau,
+
+    #[strum(to_string = "Europe alternate languages / US special releases")]
     EuropeAlternateLanguagesUSSpecialReleases,
+
+    #[strum(to_string = "Unknown")]
     Unknown,
-}
-
-impl RegionCode {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::SystemWiiChannels => "System Wii Channels (i.e. Mii Channel)",
-            Self::UfouriaTheSagaNA => "Ufouria: The Saga (NA)",
-            Self::Germany => "Germany",
-            Self::USA => "USA",
-            Self::France => "France",
-            Self::NetherlandsEuropeAlternateLanguages => "Netherlands / Europe alternate languages",
-            Self::Italy => "Italy",
-            Self::Japan => "Japan",
-            Self::Korea => "Korea",
-            Self::JapaneseImportToEuropeAustraliaAndOtherPALRegions => {
-                "Japanese import to Europe, Australia and other PAL regions"
-            }
-            Self::AmericanImportToEuropeAustraliaAndOtherPALRegions => {
-                "American import to Europe, Australia and other PAL regions"
-            }
-            Self::JapaneseImportToUSAAndOtherNTSCRegions => {
-                "Japanese import to USA and other NTSC regions"
-            }
-            Self::EuropeAndOtherPALRegionsSuchAsAustralia => {
-                "Europe and other PAL regions such as Australia"
-            }
-            Self::JapaneseVirtualConsoleImportToKorea => "Japanese Virtual Console import to Korea",
-            Self::Russia => "Russia",
-            Self::Spain => "Spain",
-            Self::AmericanVirtualConsoleImportToKorea => "American Virtual Console import to Korea",
-            Self::AustraliaEuropeAlternateLanguages => "Australia / Europe alternate languages",
-            Self::Scandinavia => "Scandinavia",
-            Self::RepublicOfChinaTaiwanHongKongMacau => {
-                "Republic of China (Taiwan) / Hong Kong / Macau"
-            }
-            Self::EuropeAlternateLanguagesUSSpecialReleases => {
-                "Europe alternate languages / US special releases"
-            }
-            Self::Unknown => "Unknown",
-        }
-    }
-}
-
-impl std::fmt::Display for RegionCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
-    }
 }
 
 impl From<char> for RegionCode {

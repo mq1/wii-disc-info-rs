@@ -1,16 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{BUF_SIZE, HEADER_SIZE};
+use crate::{BUF_SIZE, HEADER_SIZE, errors::Error};
 use futures_lite::{AsyncRead, AsyncReadExt, io};
 
 pub async fn read<R: AsyncRead + Unpin>(
     reader: &mut R,
     initial_data: &[u8],
-) -> io::Result<[u8; HEADER_SIZE]> {
+) -> Result<[u8; HEADER_SIZE], Error> {
     let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap()) as usize;
     if num_blocks == 0 {
-        return Err(io::Error::from(io::ErrorKind::InvalidData));
+        return Err(Error::Gcz);
     }
 
     // header[0x20..] contains the block pointer table inline
@@ -18,7 +18,7 @@ pub async fn read<R: AsyncRead + Unpin>(
     let blk0_offset = blk0_ptr & !(1u64 << 63);
     // Block 0 must be at offset 0 in the data region
     if blk0_offset != 0 {
-        return Err(io::Error::from(io::ErrorKind::InvalidData));
+        return Err(Error::Gcz);
     }
 
     // Determine compressed size of block 0
@@ -30,14 +30,14 @@ pub async fn read<R: AsyncRead + Unpin>(
         let blk1_ptr = u64::from_le_bytes(initial_data[0x28..0x30].try_into().unwrap());
         let blk1_offset = blk1_ptr & !(1u64 << 63);
         if blk1_offset == 0 {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(Error::Gcz);
         }
         blk1_offset as usize
     };
 
     // Check compressed size is reasonable (avoid OOM)
     if compressed_size > 1024 * 1024 {
-        return Err(io::Error::from(io::ErrorKind::InvalidData));
+        return Err(Error::Gcz);
     }
 
     // Skip the remainder of the block pointer + hash tables
@@ -45,42 +45,33 @@ pub async fn read<R: AsyncRead + Unpin>(
     let data_start = 0x20 + num_blocks * 12;
 
     // Read and decompress block 0
-    let mut buf = Box::new_uninit_slice(compressed_size);
-    let ptr = buf.as_mut_ptr().cast::<u8>();
-    let slice = unsafe { std::slice::from_raw_parts_mut(ptr, compressed_size) };
+    let mut buf = vec![0u8; compressed_size].into_boxed_slice();
 
     if let Some(overlap) = BUF_SIZE.checked_sub(data_start) {
-        slice[..overlap].copy_from_slice(&initial_data[data_start..]);
-        reader.read_exact(&mut slice[overlap..]).await?;
+        buf[..overlap].copy_from_slice(&initial_data[data_start..]);
+        reader.read_exact(&mut buf[overlap..]).await?;
     } else {
         let skip = (data_start - BUF_SIZE) as u64;
         io::copy(&mut reader.take(skip), &mut io::sink()).await?;
-        reader.read_exact(slice).await?;
+        reader.read_exact(&mut buf).await?;
     }
-
-    // SAFETY: read_exact would have thrown an error, so buf is surely fully written at this point
-    let block_data = unsafe { buf.assume_init() };
 
     if blk0_ptr & (1u64 << 63) != 0 {
         // Uncompressed
-        let header = block_data
-            .first_chunk::<HEADER_SIZE>()
-            .ok_or(io::Error::from(io::ErrorKind::InvalidData))?;
-
-        Ok(*header)
+        buf.first_chunk::<HEADER_SIZE>().copied().ok_or(Error::Gcz)
     } else {
         #[cfg(not(feature = "deflate"))]
         {
-            Err(io::Error::from(io::ErrorKind::InvalidData))
+            return Err(Error::Gcz);
         }
 
         #[cfg(feature = "deflate")]
         {
-            let mut buf = [0u8; HEADER_SIZE];
+            let mut header = [0u8; HEADER_SIZE];
 
             let res = miniz_oxide::inflate::decompress_slice_iter_to_slice(
-                &mut buf,
-                std::iter::once(block_data.as_ref()),
+                &mut header,
+                std::iter::once(&buf[..]),
                 true,
                 false,
             );
@@ -88,10 +79,10 @@ pub async fn read<R: AsyncRead + Unpin>(
             if let Err(status) = res
                 && status != miniz_oxide::inflate::TINFLStatus::HasMoreOutput
             {
-                return Err(io::Error::from(io::ErrorKind::InvalidData));
+                return Err(Error::Gcz);
             }
 
-            Ok(buf)
+            Ok(header)
         }
     }
 }
