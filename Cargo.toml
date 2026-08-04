@@ -10,7 +10,7 @@ homepage = "https://github.com/mq1/wii-disc-info-rs"
 description = "Query info about wii disc files (without requiring Seek)"
 
 [features]
-default = ["deflate", "cli"]
+default = ["deflate"]
 deflate = ["miniz_oxide"]
 cli = ["dep:futures-executor"]
 
