@@ -3,6 +3,7 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
+#[cfg(feature = "cli")]
 fn main() {
     futures_executor::block_on(async {
         use std::io::IsTerminal;
@@ -27,4 +28,9 @@ fn main() {
         println!("Is GameCube: {}", info.is_gc());
         println!("Game Title: {}", info.game_title());
     })
+}
+
+#[cfg(not(feature = "cli"))]
+fn main() {
+    println!("Please add the `cli` feature to enable the CLI");
 }
