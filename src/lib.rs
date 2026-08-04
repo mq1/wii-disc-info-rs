@@ -10,7 +10,7 @@ mod regions;
 
 use crate::errors::Error;
 pub use formats::Format;
-use futures_lite::{AsyncRead, AsyncReadExt, future::block_on, io::AssertAsync};
+use futures_util::{AsyncRead, AsyncReadExt};
 pub use regions::RegionCode;
 use smol_str::SmolStr;
 
@@ -92,11 +92,6 @@ impl Meta {
             disc_number,
             disc_version,
         })
-    }
-
-    pub fn read_blocking<R: std::io::Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut reader = AssertAsync::new(reader);
-        block_on(Self::read(&mut reader))
     }
 
     #[must_use]

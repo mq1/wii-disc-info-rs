@@ -3,24 +3,28 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use std::io::IsTerminal;
-
 fn main() {
-    let mut reader = std::io::stdin();
+    futures_executor::block_on(async {
+        use std::io::IsTerminal;
 
-    if reader.is_terminal() {
-        eprintln!("Usage: wii-disc-info < FILE");
-        std::process::exit(1);
-    }
+        let reader = std::io::stdin();
 
-    let info = wii_disc_info::Meta::read_blocking(&mut reader).unwrap();
+        if reader.is_terminal() {
+            eprintln!("Usage: wii-disc-info < FILE");
+            std::process::exit(1);
+        }
 
-    println!("Format: {}", info.format());
-    println!("Game ID: {}", info.game_id());
-    println!("Region: {}", info.region());
-    println!("Disc Number: {}", info.disc_number());
-    println!("Disc Version: {}", info.disc_version());
-    println!("Is Wii: {}", info.is_wii());
-    println!("Is GameCube: {}", info.is_gc());
-    println!("Game Title: {}", info.game_title());
+        let mut reader = futures_util::io::AllowStdIo::new(reader);
+
+        let info = wii_disc_info::Meta::read(&mut reader).await.unwrap();
+
+        println!("Format: {}", info.format());
+        println!("Game ID: {}", info.game_id());
+        println!("Region: {}", info.region());
+        println!("Disc Number: {}", info.disc_number());
+        println!("Disc Version: {}", info.disc_version());
+        println!("Is Wii: {}", info.is_wii());
+        println!("Is GameCube: {}", info.is_gc());
+        println!("Game Title: {}", info.game_title());
+    })
 }
