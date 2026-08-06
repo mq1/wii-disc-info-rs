@@ -3,19 +3,19 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use futures::{executor::block_on, io::AllowStdIo};
-use std::io::{IsTerminal, stdin};
-
+#[cfg(feature = "cli")]
 fn main() {
-    block_on(async {
-        let reader = stdin();
+    futures::executor::block_on(async {
+        use std::io::IsTerminal;
+
+        let reader = std::io::stdin();
 
         if reader.is_terminal() {
             eprintln!("Usage: wii-disc-info < FILE");
             std::process::exit(1);
         }
 
-        let mut reader = AllowStdIo::new(reader);
+        let mut reader = futures::io::AllowStdIo::new(reader);
 
         let info = wii_disc_info::Meta::read(&mut reader).await.unwrap();
 
@@ -28,4 +28,9 @@ fn main() {
         println!("Is GameCube: {}", info.is_gc());
         println!("Game Title: {}", info.game_title());
     })
+}
+
+#[cfg(not(feature = "cli"))]
+fn main() {
+    println!("Please add the `cli` feature to enable the CLI");
 }
