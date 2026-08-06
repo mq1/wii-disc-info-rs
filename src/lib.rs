@@ -10,20 +10,20 @@ mod regions;
 
 use crate::errors::Error;
 pub use formats::Format;
-use futures_util::{AsyncRead, AsyncReadExt};
+use futures::{AsyncRead, AsyncReadExt};
 pub use regions::RegionCode;
-use smol_str::SmolStr;
 
 const HEADER_SIZE: usize = 0x60;
 const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
 const GC_MAGIC: [u8; 4] = [0xC2, 0x33, 0x9F, 0x3D];
 const BUF_SIZE: usize = 0x8000; // 32 KiB
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Meta {
     format: Format,
     game_id: [u8; 6],
-    game_title: SmolStr,
+    game_title: [u8; 0x40],
+    game_title_len: u8,
     is_wii: bool,
     disc_number: u8,
     disc_version: u8,
@@ -70,14 +70,16 @@ impl Meta {
             return Err(Error::InvalidGameId);
         }
 
+        let game_title: [u8; 0x40] = header[0x20..0x60].try_into().unwrap();
+
         // Validate Game Title length
-        let game_title_len = header[0x20..].iter().position(|&b| b == 0).unwrap_or(0x40);
+        let game_title_len = game_title.iter().position(|&b| b == 0).unwrap_or(0x40) as u8;
         if game_title_len == 0 {
             return Err(Error::InvalidGameTitle);
         }
 
         // Validate Game Title
-        let Ok(game_title) = str::from_utf8(&header[0x20..0x20 + game_title_len]) else {
+        if str::from_utf8(&game_title).is_err() {
             return Err(Error::InvalidGameTitle);
         };
 
@@ -87,7 +89,8 @@ impl Meta {
         Ok(Self {
             format,
             game_id,
-            game_title: game_title.into(),
+            game_title,
+            game_title_len,
             is_wii,
             disc_number,
             disc_version,
@@ -153,6 +156,9 @@ impl Meta {
     #[must_use]
     #[inline]
     pub fn game_title(&self) -> &str {
-        &self.game_title
+        let len = self.game_title_len as usize;
+
+        // SAFETY: game_title is validated in Meta::read
+        unsafe { str::from_utf8_unchecked(&self.game_title[0..len]) }
     }
 }

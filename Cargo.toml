@@ -12,15 +12,13 @@ description = "Query info about wii disc files (without requiring Seek)"
 [features]
 default = ["deflate"]
 deflate = ["miniz_oxide"]
-cli = ["dep:futures-executor"]
+cli = []
 
 [dependencies]
 thiserror = "2"
 strum = "0.28"
 strum_macros = "0.28"
-smol_str = { version = "0.3", default-features = false }
-futures-util = { version = "0.3", default-features = false, features = ["io"] }
-futures-executor = { version = "0.3", optional = true }
+futures = "0.3"
 miniz_oxide = { version = "0.9", optional = true, default-features = false }
 
 [profile.release]
