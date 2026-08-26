@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{BUF_SIZE, HEADER_SIZE, errors::Error};
-use futures::{AsyncRead, AsyncReadExt, io};
 
-pub async fn read<R: AsyncRead + Unpin>(
-    reader: &mut R,
-    initial_data: &[u8],
-) -> Result<[u8; HEADER_SIZE], Error> {
+struct Block0Info {
+    compressed_size: usize,
+    data_start: usize,
+    is_uncompressed: bool,
+}
+
+/// Pure helper: Parse and validate GCZ block 0 layout from initial header data
+fn parse_block0_info(initial_data: &[u8]) -> Result<Block0Info, Error> {
     let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap()) as usize;
     if num_blocks == 0 {
         return Err(Error::Gcz);
@@ -40,29 +43,24 @@ pub async fn read<R: AsyncRead + Unpin>(
         return Err(Error::Gcz);
     }
 
-    // Skip the remainder of the block pointer + hash tables
-    // Data region starts at 0x20 + num_blocks * 12
     let data_start = 0x20 + num_blocks * 12;
+    let is_uncompressed = (blk0_ptr & (1u64 << 63)) != 0;
 
-    // Read and decompress block 0
-    let mut buf = vec![0u8; compressed_size].into_boxed_slice();
+    Ok(Block0Info {
+        compressed_size,
+        data_start,
+        is_uncompressed,
+    })
+}
 
-    if let Some(overlap) = BUF_SIZE.checked_sub(data_start) {
-        buf[..overlap].copy_from_slice(&initial_data[data_start..]);
-        reader.read_exact(&mut buf[overlap..]).await?;
-    } else {
-        let skip = (data_start - BUF_SIZE) as u64;
-        io::copy(&mut reader.take(skip), &mut io::sink()).await?;
-        reader.read_exact(&mut buf).await?;
-    }
-
-    if blk0_ptr & (1u64 << 63) != 0 {
-        // Uncompressed
+/// Pure helper: Extract and decompress header from the downloaded block 0 buffer
+fn extract_header(buf: &[u8], is_uncompressed: bool) -> Result<[u8; HEADER_SIZE], Error> {
+    if is_uncompressed {
         buf.first_chunk::<HEADER_SIZE>().copied().ok_or(Error::Gcz)
     } else {
         #[cfg(not(feature = "deflate"))]
         {
-            return Err(Error::Gcz);
+            Err(Error::Gcz)
         }
 
         #[cfg(feature = "deflate")]
@@ -71,7 +69,7 @@ pub async fn read<R: AsyncRead + Unpin>(
 
             let res = miniz_oxide::inflate::decompress_slice_iter_to_slice(
                 &mut header,
-                std::iter::once(&buf[..]),
+                std::iter::once(buf),
                 true,
                 false,
             );
@@ -85,4 +83,49 @@ pub async fn read<R: AsyncRead + Unpin>(
             Ok(header)
         }
     }
+}
+
+/// Synchronous read
+pub fn read<R: std::io::Read>(
+    reader: &mut R,
+    initial_data: &[u8],
+) -> Result<[u8; HEADER_SIZE], Error> {
+    use std::io::Read;
+
+    let info = parse_block0_info(initial_data)?;
+    let mut buf = vec![0u8; info.compressed_size];
+
+    if let Some(overlap) = BUF_SIZE.checked_sub(info.data_start) {
+        buf[..overlap].copy_from_slice(&initial_data[info.data_start..]);
+        reader.read_exact(&mut buf[overlap..])?;
+    } else {
+        let skip = (info.data_start - BUF_SIZE) as u64;
+        std::io::copy(&mut reader.take(skip), &mut std::io::sink())?;
+        reader.read_exact(&mut buf)?;
+    }
+
+    extract_header(&buf, info.is_uncompressed)
+}
+
+#[cfg(feature = "async")]
+/// Asynchronous read
+pub async fn read_async<R: futures::AsyncReadExt + Unpin>(
+    reader: &mut R,
+    initial_data: &[u8],
+) -> Result<[u8; HEADER_SIZE], Error> {
+    use futures::AsyncReadExt;
+
+    let info = parse_block0_info(initial_data)?;
+    let mut buf = vec![0u8; info.compressed_size];
+
+    if let Some(overlap) = BUF_SIZE.checked_sub(info.data_start) {
+        buf[..overlap].copy_from_slice(&initial_data[info.data_start..]);
+        reader.read_exact(&mut buf[overlap..]).await?;
+    } else {
+        let skip = (info.data_start - BUF_SIZE) as u64;
+        futures::io::copy(&mut reader.take(skip), &mut futures::io::sink()).await?;
+        reader.read_exact(&mut buf).await?;
+    }
+
+    extract_header(&buf, info.is_uncompressed)
 }
