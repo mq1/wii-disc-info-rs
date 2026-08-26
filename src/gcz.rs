@@ -109,11 +109,11 @@ pub fn read<R: std::io::Read>(
 
 #[cfg(feature = "async")]
 /// Asynchronous read
-pub async fn read_async<R: futures::AsyncReadExt + Unpin>(
+pub async fn read_async<R: futures_lite::AsyncReadExt + Unpin>(
     reader: &mut R,
     initial_data: &[u8],
 ) -> Result<[u8; HEADER_SIZE], Error> {
-    use futures::AsyncReadExt;
+    use futures_lite::AsyncReadExt;
 
     let info = parse_block0_info(initial_data)?;
     let mut buf = vec![0u8; info.compressed_size];
@@ -123,7 +123,7 @@ pub async fn read_async<R: futures::AsyncReadExt + Unpin>(
         reader.read_exact(&mut buf[overlap..]).await?;
     } else {
         let skip = (info.data_start - BUF_SIZE) as u64;
-        futures::io::copy(&mut reader.take(skip), &mut futures::io::sink()).await?;
+        futures_lite::io::copy(&mut reader.take(skip), &mut futures_lite::io::sink()).await?;
         reader.read_exact(&mut buf).await?;
     }
 

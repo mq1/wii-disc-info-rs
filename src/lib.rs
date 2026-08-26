@@ -95,8 +95,10 @@ impl Meta {
 
     #[cfg(feature = "async")]
     /// Asynchronous read
-    pub async fn read_async<R: futures::AsyncRead + Unpin>(reader: &mut R) -> Result<Self, Error> {
-        use futures::AsyncReadExt;
+    pub async fn read_async<R: futures_lite::AsyncRead + Unpin>(
+        reader: &mut R,
+    ) -> Result<Self, Error> {
+        use futures_lite::AsyncReadExt;
 
         let mut buf = vec![0u8; BUF_SIZE];
         reader.read_exact(&mut buf).await?;
