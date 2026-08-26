@@ -4,11 +4,12 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 pub mod errors;
-mod formats;
+pub mod formats;
+pub mod game_id;
 mod gcz;
-mod regions;
+pub mod regions;
 
-use crate::errors::Error;
+use crate::{errors::Error, game_id::GameID};
 pub use formats::Format;
 use futures::{AsyncRead, AsyncReadExt};
 pub use regions::RegionCode;
@@ -21,7 +22,7 @@ const BUF_SIZE: usize = 0x8000; // 32 KiB
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     format: Format,
-    game_id: [u8; 6],
+    game_id: GameID,
     game_title: [u8; 0x40],
     game_title_len: u8,
     is_wii: bool,
@@ -55,20 +56,7 @@ impl Meta {
         }
 
         let game_id: [u8; 6] = header[0..6].try_into().unwrap();
-
-        // Validate Game ID length
-        let game_id_len = game_id.iter().position(|&b| b == 0).unwrap_or(6);
-        if game_id_len < 4 {
-            return Err(Error::InvalidGameId);
-        }
-
-        // Validate Game ID
-        if !game_id[0..game_id_len]
-            .iter()
-            .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
-        {
-            return Err(Error::InvalidGameId);
-        }
+        let game_id = GameID::try_from(game_id)?;
 
         let game_title: [u8; 0x40] = header[0x20..0x60].try_into().unwrap();
 
@@ -79,7 +67,7 @@ impl Meta {
         }
 
         // Validate Game Title
-        if str::from_utf8(&game_title).is_err() {
+        if std::str::from_utf8(&game_title).is_err() {
             return Err(Error::InvalidGameTitle);
         };
 
@@ -105,28 +93,8 @@ impl Meta {
 
     #[must_use]
     #[inline]
-    pub fn game_id(&self) -> &str {
-        let len = if self.game_id[4] == 0 { 4 } else { 6 };
-
-        // SAFETY: game_id is validated in Meta::read
-        unsafe { str::from_utf8_unchecked(&self.game_id[0..len]) }
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn game_id_bytes(&self) -> &[u8; 6] {
-        &self.game_id
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn region(&self) -> RegionCode {
-        // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.game_id == *b"RLWW78" {
-            return RegionCode::Scandinavia;
-        }
-
-        RegionCode::from(self.game_id[3])
+    pub fn game_id(&self) -> GameID {
+        self.game_id
     }
 
     #[must_use]

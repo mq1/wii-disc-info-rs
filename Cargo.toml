@@ -16,8 +16,6 @@ cli = ["futures/executor"]
 
 [dependencies]
 thiserror = "2"
-strum = "0.28"
-strum_macros = "0.28"
 futures = { version = "0.3", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.9", optional = true, default-features = false }
 
