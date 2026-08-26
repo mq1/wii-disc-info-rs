@@ -14,9 +14,10 @@ fn main() {
     }
 
     let info = wii_disc_info::Meta::read(&mut reader).unwrap();
+
     println!("Format: {}", info.format());
     println!("Game ID: {}", info.game_id());
-    println!("Region: {}", info.region());
+    println!("Region: {}", info.game_id().region());
     println!("Disc Number: {}", info.disc_number());
     println!("Disc Version: {}", info.disc_version());
     println!("Is Wii: {}", info.is_wii());
