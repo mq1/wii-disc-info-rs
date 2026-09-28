@@ -3,7 +3,7 @@
 
 use crate::{RegionCode, errors::Error};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
 pub struct GameID {
     inner: [u8; 6],
@@ -34,9 +34,15 @@ impl GameID {
 
     #[must_use]
     #[inline]
+    pub const fn system_code(&self) -> u8 {
+        self.inner[0]
+    }
+
+    #[must_use]
+    #[inline]
     pub const fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if matches!(&self.inner, b"RLWW78") {
+        if self.inner == b"RLWW78" {
             return RegionCode::Scandinavia;
         }
 
