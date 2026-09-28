@@ -12,12 +12,6 @@ pub struct GameID {
 impl GameID {
     #[must_use]
     #[inline]
-    pub const unsafe fn new_unchecked(inner: [u8; 6]) -> Self {
-        GameID { inner }
-    }
-
-    #[must_use]
-    #[inline]
     pub fn as_str(&self) -> &str {
         let len = if self.inner[4] == 0 { 4 } else { 6 };
 
@@ -59,6 +53,14 @@ impl GameID {
         }
 
         RegionCode::from_region_byte(self.inner[3])
+    }
+
+    #[must_use]
+    #[inline]
+    /// Compact representation of the game ID as a 32-bit unsigned integer
+    pub fn to_u32(&self) -> u32 {
+        // SAFETY: already validated
+        u32::from_str_radix(self.as_str(), 36).unwrap()
     }
 }
 
