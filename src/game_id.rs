@@ -12,6 +12,12 @@ pub struct GameID {
 impl GameID {
     #[must_use]
     #[inline]
+    pub const unsafe fn new_unchecked(inner: [u8; 6]) -> Self {
+        GameID { inner }
+    }
+
+    #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         let len = if self.inner[4] == 0 { 4 } else { 6 };
 
@@ -24,6 +30,12 @@ impl GameID {
     pub fn as_partial_str(&self) -> &str {
         // SAFETY: already validated
         unsafe { std::str::from_utf8_unchecked(&self.inner[..3]) }
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn as_bytes(&self) -> &[u8; 6] {
+        &self.inner
     }
 
     #[must_use]
