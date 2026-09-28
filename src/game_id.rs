@@ -42,7 +42,7 @@ impl GameID {
     #[inline]
     pub const fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if self.inner == b"RLWW78" {
+        if matches!(&self.inner, b"RLWW78") {
             return RegionCode::Scandinavia;
         }
 
