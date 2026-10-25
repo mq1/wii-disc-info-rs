@@ -45,7 +45,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97
+        uses: dtolnay/rust-toolchain@1.99
         with:
           targets: ${{ matrix.target }}
 
