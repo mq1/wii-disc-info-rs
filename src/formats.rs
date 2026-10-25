@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderOffset {
+    Fixed(usize),
+    Gcz,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Iso,
     Wbfs,
@@ -14,20 +20,21 @@ pub enum Format {
 
 impl Format {
     #[must_use]
-    pub fn parse_header(header: &[u8]) -> Self {
-        match header[0..4] {
-            [b'W', b'B', b'F', b'S'] => Self::Wbfs,
-            [b'C', b'I', b'S', b'O'] => Self::Ciso,
-            [b'R', b'V', b'Z', 0x01] => Self::Rvz,
-            [b'W', b'I', b'A', 0x01] => Self::Wia,
-            [0xae, 0x0f, 0x38, 0xa2] => Self::Tgc,
-            [0x01, 0xc0, 0x0b, 0xb1] => Self::Gcz,
-            _ => Self::Iso,
+    pub fn parse_header(header: &[u8]) -> std::io::Result<Self> {
+        match header.get(..4) {
+            Some([b'W', b'B', b'F', b'S']) => Ok(Self::Wbfs),
+            Some([b'C', b'I', b'S', b'O']) => Ok(Self::Ciso),
+            Some([b'R', b'V', b'Z', 0x01]) => Ok(Self::Rvz),
+            Some([b'W', b'I', b'A', 0x01]) => Ok(Self::Wia),
+            Some([0xae, 0x0f, 0x38, 0xa2]) => Ok(Self::Tgc),
+            Some([0x01, 0xc0, 0x0b, 0xb1]) => Ok(Self::Gcz),
+            Some(_) => Ok(Self::Iso),
+            None => Err(std::io::ErrorKind::UnexpectedEof.into()),
         }
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Format::Iso => "ISO",
             Format::Wbfs => "WBFS",
@@ -36,6 +43,17 @@ impl Format {
             Format::Wia => "WIA",
             Format::Tgc => "TGC",
             Format::Gcz => "GCZ",
+        }
+    }
+
+    #[must_use]
+    pub const fn header_offset(&self) -> HeaderOffset {
+        match self {
+            Format::Iso => HeaderOffset::Fixed(0),
+            Format::Wbfs => HeaderOffset::Fixed(0x200),
+            Format::Rvz | Format::Wia => HeaderOffset::Fixed(0x58),
+            Format::Ciso | Format::Tgc => HeaderOffset::Fixed(0x8000),
+            Format::Gcz => HeaderOffset::Gcz,
         }
     }
 }

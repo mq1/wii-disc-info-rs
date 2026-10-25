@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{RegionCode, errors::Error};
+use crate::RegionCode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
@@ -16,14 +16,20 @@ impl GameID {
         let len = if self.inner[4] == 0 { 4 } else { 6 };
 
         // SAFETY: already validated
-        unsafe { std::str::from_utf8_unchecked(&self.inner[..len]) }
+        #[allow(unsafe_code)]
+        unsafe {
+            std::str::from_utf8_unchecked(self.inner.get_unchecked(..len))
+        }
     }
 
     #[must_use]
     #[inline]
     pub fn as_partial_str(&self) -> &str {
         // SAFETY: already validated
-        unsafe { std::str::from_utf8_unchecked(&self.inner[..3]) }
+        #[allow(unsafe_code)]
+        unsafe {
+            std::str::from_utf8_unchecked(&self.inner[..3])
+        }
     }
 
     #[must_use]
@@ -65,20 +71,26 @@ impl GameID {
 }
 
 impl TryFrom<[u8; 6]> for GameID {
-    type Error = Error;
+    type Error = std::io::Error;
 
     fn try_from(value: [u8; 6]) -> Result<Self, Self::Error> {
         let len = value.iter().position(|&b| b == 0).unwrap_or(6);
 
         if len != 4 && len != 6 {
-            return Err(Error::InvalidGameId);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid game id",
+            ));
         }
 
         if !value[..len]
             .iter()
             .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
-            return Err(Error::InvalidGameId);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid game id",
+            ));
         }
 
         Ok(GameID { inner: value })
@@ -86,7 +98,7 @@ impl TryFrom<[u8; 6]> for GameID {
 }
 
 impl std::str::FromStr for GameID {
-    type Err = Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut buf = [0; 6];

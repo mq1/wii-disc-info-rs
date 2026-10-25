@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(clippy::all, rust_2018_idioms)]
+#![deny(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
-pub mod errors;
 pub mod formats;
 pub mod game_id;
 mod gcz;
 pub mod regions;
 
-use crate::{errors::Error, game_id::GameID};
+use crate::{formats::HeaderOffset, game_id::GameID};
 pub use formats::Format;
 pub use regions::RegionCode;
 
@@ -18,7 +19,7 @@ const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
 const GC_MAGIC: [u8; 4] = [0xC2, 0x33, 0x9F, 0x3D];
 const BUF_SIZE: usize = 0x8000; // 32 KiB
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Meta {
     format: Format,
     game_id: GameID,
@@ -30,12 +31,15 @@ pub struct Meta {
 }
 
 impl Meta {
-    fn parse_header(header: [u8; HEADER_SIZE]) -> Result<Self, Error> {
+    fn parse_header(header: [u8; HEADER_SIZE]) -> std::io::Result<Self> {
         // Validate Console
         let is_wii = header[0x18..0x1c] == WII_MAGIC;
         let is_gc = header[0x1c..0x20] == GC_MAGIC;
         if is_wii == is_gc {
-            return Err(Error::InvalidConsole);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid console",
+            ));
         }
 
         let game_id: [u8; 6] = header[0..6].try_into().unwrap();
@@ -46,12 +50,18 @@ impl Meta {
         // Validate Game Title length
         let game_title_len = game_title.iter().position(|&b| b == 0).unwrap_or(0x40) as u8;
         if game_title_len == 0 {
-            return Err(Error::InvalidGameTitle);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid game title",
+            ));
         }
 
         // Validate Game Title
         if std::str::from_utf8(&game_title).is_err() {
-            return Err(Error::InvalidGameTitle);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid game title",
+            ));
         }
 
         let disc_number = header[6];
@@ -69,20 +79,21 @@ impl Meta {
     }
 
     /// Synchronous read
-    pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read(mut reader: impl std::io::Read) -> std::io::Result<Self> {
         let mut buf = vec![0u8; BUF_SIZE];
         reader.read_exact(&mut buf)?;
 
-        let format = Format::parse_header(&buf[..]);
-        let header = match format {
-            Format::Iso => buf[0..HEADER_SIZE].try_into().unwrap(),
-            Format::Wbfs => buf[0x200..0x200 + HEADER_SIZE].try_into().unwrap(),
-            Format::Rvz | Format::Wia => buf[0x58..0x58 + HEADER_SIZE].try_into().unwrap(),
-            Format::Ciso | Format::Tgc => {
-                reader.read_exact(&mut buf)?;
-                buf[0..HEADER_SIZE].try_into().unwrap()
+        let format = Format::parse_header(&buf[..])?;
+        let header = match format.header_offset() {
+            HeaderOffset::Fixed(offset) if offset < BUF_SIZE => {
+                buf[offset..offset + HEADER_SIZE].try_into().unwrap()
             }
-            Format::Gcz => gcz::read(reader, &buf[..])?,
+            HeaderOffset::Fixed(offset) if offset == BUF_SIZE => {
+                reader.read_exact(&mut buf)?;
+                buf[..HEADER_SIZE].try_into().unwrap()
+            }
+            HeaderOffset::Fixed(_) => unreachable!(),
+            HeaderOffset::Gcz => gcz::read(&mut reader, &buf[..])?,
         };
 
         let meta = Self {
@@ -93,26 +104,26 @@ impl Meta {
         Ok(meta)
     }
 
-    #[cfg(feature = "async")]
     /// Asynchronous read
-    pub async fn read_async<R: futures_lite::AsyncRead + Unpin>(
-        reader: &mut R,
-    ) -> Result<Self, Error> {
-        use futures_lite::AsyncReadExt;
-
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    #[cfg(feature = "async")]
+    pub async fn read_async(
+        mut reader: impl futures_lite::AsyncReadExt + Unpin,
+    ) -> std::io::Result<Self> {
         let mut buf = vec![0u8; BUF_SIZE];
         reader.read_exact(&mut buf).await?;
 
-        let format = Format::parse_header(&buf[..]);
-        let header = match format {
-            Format::Iso => buf[0..HEADER_SIZE].try_into().unwrap(),
-            Format::Wbfs => buf[0x200..0x200 + HEADER_SIZE].try_into().unwrap(),
-            Format::Rvz | Format::Wia => buf[0x58..0x58 + HEADER_SIZE].try_into().unwrap(),
-            Format::Ciso | Format::Tgc => {
-                reader.read_exact(&mut buf).await?;
-                buf[0..HEADER_SIZE].try_into().unwrap()
+        let format = Format::parse_header(&buf[..])?;
+        let header = match format.header_offset() {
+            HeaderOffset::Fixed(offset) if offset < BUF_SIZE => {
+                buf[offset..offset + HEADER_SIZE].try_into().unwrap()
             }
-            Format::Gcz => gcz::read_async(reader, &buf[..]).await?,
+            HeaderOffset::Fixed(offset) if offset == BUF_SIZE => {
+                reader.read_exact(&mut buf).await?;
+                buf[..HEADER_SIZE].try_into().unwrap()
+            }
+            HeaderOffset::Fixed(_) => unreachable!(),
+            HeaderOffset::Gcz => gcz::read_async(&mut reader, &buf[..]).await?,
         };
 
         let meta = Self {
@@ -165,6 +176,9 @@ impl Meta {
         let len = usize::from(self.game_title_len);
 
         // SAFETY: game_title is validated in Meta::read
-        unsafe { str::from_utf8_unchecked(&self.game_title[0..len]) }
+        #[allow(unsafe_code)]
+        unsafe {
+            str::from_utf8_unchecked(self.game_title.get_unchecked(..len))
+        }
     }
 }

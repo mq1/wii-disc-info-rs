@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{BUF_SIZE, HEADER_SIZE, errors::Error};
+use crate::{BUF_SIZE, HEADER_SIZE};
 
 struct Block0Info {
     compressed_size: usize,
@@ -10,10 +10,10 @@ struct Block0Info {
 }
 
 /// Pure helper: Parse and validate GCZ block 0 layout from initial header data
-fn parse_block0_info(initial_data: &[u8]) -> Result<Block0Info, Error> {
+fn parse_block0_info(initial_data: &[u8]) -> std::io::Result<Block0Info> {
     let num_blocks = u32::from_le_bytes(initial_data[0x1C..0x20].try_into().unwrap()) as usize;
     if num_blocks == 0 {
-        return Err(Error::Gcz);
+        return Err(std::io::ErrorKind::InvalidData.into());
     }
 
     // header[0x20..] contains the block pointer table inline
@@ -21,7 +21,7 @@ fn parse_block0_info(initial_data: &[u8]) -> Result<Block0Info, Error> {
     let blk0_offset = blk0_ptr & !(1u64 << 63);
     // Block 0 must be at offset 0 in the data region
     if blk0_offset != 0 {
-        return Err(Error::Gcz);
+        return Err(std::io::ErrorKind::InvalidData.into());
     }
 
     // Determine compressed size of block 0
@@ -33,14 +33,14 @@ fn parse_block0_info(initial_data: &[u8]) -> Result<Block0Info, Error> {
         let blk1_ptr = u64::from_le_bytes(initial_data[0x28..0x30].try_into().unwrap());
         let blk1_offset = blk1_ptr & !(1u64 << 63);
         if blk1_offset == 0 {
-            return Err(Error::Gcz);
+            return Err(std::io::ErrorKind::InvalidData.into());
         }
         blk1_offset as usize
     };
 
     // Check compressed size is reasonable (avoid OOM)
     if compressed_size > 1024 * 1024 {
-        return Err(Error::Gcz);
+        return Err(std::io::ErrorKind::InvalidData.into());
     }
 
     let data_start = 0x20 + num_blocks * 12;
@@ -54,13 +54,18 @@ fn parse_block0_info(initial_data: &[u8]) -> Result<Block0Info, Error> {
 }
 
 /// Pure helper: Extract and decompress header from the downloaded block 0 buffer
-fn extract_header(buf: &[u8], is_uncompressed: bool) -> Result<[u8; HEADER_SIZE], Error> {
+fn extract_header(buf: &[u8], is_uncompressed: bool) -> std::io::Result<[u8; HEADER_SIZE]> {
     if is_uncompressed {
-        buf.first_chunk::<HEADER_SIZE>().copied().ok_or(Error::Gcz)
+        buf.first_chunk::<HEADER_SIZE>()
+            .copied()
+            .ok_or(std::io::ErrorKind::UnexpectedEof.into())
     } else {
         #[cfg(not(feature = "deflate"))]
         {
-            Err(Error::Gcz)
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "data is compressed but deflate feature is not enabled",
+            ))
         }
 
         #[cfg(feature = "deflate")]
@@ -77,7 +82,7 @@ fn extract_header(buf: &[u8], is_uncompressed: bool) -> Result<[u8; HEADER_SIZE]
             if let Err(status) = res
                 && status != miniz_oxide::inflate::TINFLStatus::HasMoreOutput
             {
-                return Err(Error::Gcz);
+                return Err(std::io::ErrorKind::InvalidData.into());
             }
 
             Ok(header)
@@ -86,10 +91,10 @@ fn extract_header(buf: &[u8], is_uncompressed: bool) -> Result<[u8; HEADER_SIZE]
 }
 
 /// Synchronous read
-pub fn read<R: std::io::Read>(
-    reader: &mut R,
+pub fn read(
+    reader: &mut dyn std::io::Read,
     initial_data: &[u8],
-) -> Result<[u8; HEADER_SIZE], Error> {
+) -> std::io::Result<[u8; HEADER_SIZE]> {
     use std::io::Read;
 
     let info = parse_block0_info(initial_data)?;
@@ -107,12 +112,12 @@ pub fn read<R: std::io::Read>(
     extract_header(&buf, info.is_uncompressed)
 }
 
-#[cfg(feature = "async")]
 /// Asynchronous read
+#[cfg(feature = "async")]
 pub async fn read_async<R: futures_lite::AsyncReadExt + Unpin>(
     reader: &mut R,
     initial_data: &[u8],
-) -> Result<[u8; HEADER_SIZE], Error> {
+) -> std::io::Result<[u8; HEADER_SIZE]> {
     use futures_lite::AsyncReadExt;
 
     let info = parse_block0_info(initial_data)?;
