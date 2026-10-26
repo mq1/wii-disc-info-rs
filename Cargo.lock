@@ -62,7 +62,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "wii-disc-info"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "futures-lite",
  "miniz_oxide",

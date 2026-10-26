@@ -1,91 +1,87 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::RegionCode;
+use crate::{RegionCode, util::ArrayString};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
-pub struct GameID {
-    inner: [u8; 6],
+pub struct GameID(ArrayString<6>);
+
+impl Default for GameID {
+    fn default() -> Self {
+        Self(ArrayString::zero_filled())
+    }
 }
 
 impl GameID {
     #[must_use]
     #[inline]
     pub fn as_str(&self) -> &str {
-        let len = if self.inner[4] == 0 { 4 } else { 6 };
-
-        // SAFETY: already validated
-        #[allow(unsafe_code)]
-        unsafe {
-            std::str::from_utf8_unchecked(self.inner.get_unchecked(..len))
-        }
+        self.0.as_str()
     }
 
     #[must_use]
     #[inline]
     pub fn as_partial_str(&self) -> &str {
-        // SAFETY: already validated
-        #[allow(unsafe_code)]
-        unsafe {
-            std::str::from_utf8_unchecked(&self.inner[..3])
-        }
+        self.0.as_str_until::<3>()
     }
 
     #[must_use]
     #[inline]
-    pub const fn as_bytes(&self) -> &[u8; 6] {
-        &self.inner
+    pub fn as_bytes(&self) -> &[u8; 6] {
+        self.0.as_bytes()
     }
 
     #[must_use]
     #[inline]
-    pub const fn to_bytes(&self) -> [u8; 6] {
-        self.inner
+    pub fn to_bytes(&self) -> [u8; 6] {
+        self.0.to_bytes()
     }
 
     #[must_use]
     #[inline]
-    pub const fn system_code(&self) -> u8 {
-        self.inner[0]
+    pub fn system_code(&self) -> u8 {
+        self.0.byte_at::<0>()
     }
 
     #[must_use]
     #[inline]
-    pub const fn region(&self) -> RegionCode {
+    pub fn region(&self) -> RegionCode {
         // Ratatouille (RLWW78) has a region byte of 'W', but it's actually a Scandinavian release
-        if matches!(&self.inner, b"RLWW78") {
+        if self.0 == *b"RLWW78" {
             return RegionCode::Scandinavia;
         }
 
-        RegionCode::from_region_byte(self.inner[3])
+        RegionCode::from_region_byte(self.0.byte_at::<3>())
     }
 
     #[must_use]
     #[inline]
     /// Compact representation of the game ID as a 32-bit unsigned integer
     pub fn to_u32(&self) -> u32 {
-        // SAFETY: already validated
-        u32::from_str_radix(self.as_str(), 36).unwrap()
+        // already validated in "validate characters"
+        u32::from_str_radix(self.0.as_str(), 36).unwrap()
     }
 }
 
-impl TryFrom<[u8; 6]> for GameID {
+impl TryFrom<ArrayString<6>> for GameID {
     type Error = std::io::Error;
 
-    fn try_from(value: [u8; 6]) -> Result<Self, Self::Error> {
-        let len = value.iter().position(|&b| b == 0).unwrap_or(6);
-
+    fn try_from(value: ArrayString<6>) -> Result<Self, Self::Error> {
+        // validate length
+        let len = value.len();
         if len != 4 && len != 6 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "invalid game id",
+                "invalid game id length",
             ));
         }
 
-        if !value[..len]
+        // validate characters
+        if !value
+            .as_bytes()
             .iter()
-            .all(|&b| b.is_ascii_uppercase() || b.is_ascii_digit())
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
         {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -93,7 +89,27 @@ impl TryFrom<[u8; 6]> for GameID {
             ));
         }
 
-        Ok(GameID { inner: value })
+        Ok(Self(value))
+    }
+}
+
+impl TryFrom<&[u8]> for GameID {
+    type Error = std::io::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        ArrayString::try_from(value)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .and_then(Self::try_from)
+    }
+}
+
+impl TryFrom<[u8; 6]> for GameID {
+    type Error = std::io::Error;
+
+    fn try_from(value: [u8; 6]) -> Result<Self, Self::Error> {
+        ArrayString::try_from(value)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .and_then(Self::try_from)
     }
 }
 
@@ -101,9 +117,9 @@ impl std::str::FromStr for GameID {
     type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut buf = [0; 6];
-        buf.iter_mut().zip(s.bytes()).for_each(|(b, c)| *b = c);
-        GameID::try_from(buf)
+        s.parse::<ArrayString<6>>()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .and_then(Self::try_from)
     }
 }
 

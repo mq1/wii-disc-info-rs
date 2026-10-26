@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(clippy::all, rust_2018_idioms)]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod formats;
 pub mod game_id;
 mod gcz;
 pub mod regions;
+mod util;
 
 use crate::{formats::HeaderOffset, game_id::GameID};
 pub use formats::Format;
 pub use regions::RegionCode;
+use util::ArrayString;
 
 const HEADER_SIZE: usize = 0x60;
 const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
@@ -23,8 +25,7 @@ const BUF_SIZE: usize = 0x8000; // 32 KiB
 pub struct Meta {
     format: Format,
     game_id: GameID,
-    game_title: [u8; 0x40],
-    game_title_len: u8,
+    game_title: ArrayString<0x40>,
     is_wii: bool,
     disc_number: u8,
     disc_version: u8,
@@ -42,25 +43,16 @@ impl Meta {
             ));
         }
 
-        let game_id: [u8; 6] = header[0..6].try_into().unwrap();
-        let game_id = GameID::try_from(game_id)?;
+        let game_id = GameID::try_from(&header[0..6])?;
 
-        let game_title: [u8; 0x40] = header[0x20..0x60].try_into().unwrap();
+        let game_title = ArrayString::try_from(&header[0x20..0x60])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         // Validate Game Title length
-        let game_title_len = game_title.iter().position(|&b| b == 0).unwrap_or(0x40) as u8;
-        if game_title_len == 0 {
+        if game_title.is_empty() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "invalid game title",
-            ));
-        }
-
-        // Validate Game Title
-        if std::str::from_utf8(&game_title).is_err() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "invalid game title",
+                "game title is empty",
             ));
         }
 
@@ -71,7 +63,6 @@ impl Meta {
             format: Format::Iso,
             game_id,
             game_title,
-            game_title_len,
             is_wii,
             disc_number,
             disc_version,
@@ -173,12 +164,6 @@ impl Meta {
     #[must_use]
     #[inline]
     pub fn game_title(&self) -> &str {
-        let len = usize::from(self.game_title_len);
-
-        // SAFETY: game_title is validated in Meta::read
-        #[allow(unsafe_code)]
-        unsafe {
-            str::from_utf8_unchecked(self.game_title.get_unchecked(..len))
-        }
+        self.game_title.as_str()
     }
 }
